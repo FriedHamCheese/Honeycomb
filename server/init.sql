@@ -1,0 +1,61 @@
+START TRANSACTION;
+
+CREATE TABLE Device(
+  deviceID INT(64) PRIMARY KEY AUTO_INCREMENT,
+  saltedDeviceSecret VARCHAR(128),
+  saltedViewingSecret VARCHAR(128),
+  deviceSecretSalt VARCHAR(32),
+  deviceName VARCHAR(32),
+  isCompositeDevice BOOL NOT NULL
+);
+
+/*
+deviceSecret: 1
+deviceViewingSecret: 1view
+output: sha512(arg + "xd").hex()
+*/
+INSERT INTO Device(deviceSecretSalt, saltedDeviceSecret, saltedViewingSecret, deviceName, isCompositeDevice) 
+  VALUES (
+    "xd", 
+    "fc5f9e2a9f81fa58c76f2ca80270b9d7cb45f126a45c2e8e5c055b52bd0ea2bc657aed8a805b43a01c8b65778378538d7e3d839d7125d0ae072eda5b777a2e05",
+    "e496958f1cab3f92f7eb6f245de3f78b2e36a29ff7b86693b0072c4e86a9905274bf180a20bedc51e7f8a1188a036e2189cbc833d53169abcb1824047bdae955",
+    "DHT22",
+    false
+);
+
+/*
+deviceSecret: 2
+devicViewingSecret: 2view
+output: sha512(arg + "xd").hex()
+*/
+INSERT INTO Device(deviceSecretSalt, saltedDeviceSecret, saltedViewingSecret, deviceName, isCompositeDevice) 
+  VALUES (
+    "xd", 
+    "dbcee460fbc3e6a54e78e3d6f2c14e42a5cffdb98d079983a03b8c70b92e5a88a886416d1ec2821cea9120163c15b892f1bff321bdc3daf395b7f06a21a556c6",
+    "6162f4f3dc7ed6cd9fe4fdb1c86fa60e7deebc7998a3e6147e88ab4cec01553160b1b151bb8872c38941f1bed36afbb6357722a5302eda53a09be21adfe4c7cb",
+    "MQ2",
+    false
+);
+
+CREATE TABLE 1_0(
+  __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
+  temperature_celsius FLOAT,
+  relative_humidity_percent FLOAT,
+  epoch_seconds FLOAT
+);
+
+INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.0, 50.0, 0.0);
+INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.5, 51.5, 2.0);
+INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.75, 51.0, 3.0);  
+
+CREATE TABLE 2_0(
+  __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
+  CO2_ppm FLOAT,
+  epoch_seconds FLOAT  
+);
+
+INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 0.0);
+INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 1.5);
+INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 3.75);
+
+COMMIT;

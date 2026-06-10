@@ -1,0 +1,17 @@
+name: Honeycomb
+
+services:
+    database:
+        image: mysql
+        environment:
+            MYSQL_ROOT_PASSWORD: 123456
+            MYSQL_DATABASE: Honeycomb
+        ports:
+            - 3306:3306
+            
+    phpmyadmin:
+        image: phpmyadmin
+        ports: 
+            - 8080:80
+        environment:
+            PMA_HOST: database
