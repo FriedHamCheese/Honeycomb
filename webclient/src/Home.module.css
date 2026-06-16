@@ -1,0 +1,66 @@
+.topbar{
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: 100vw;
+  height: 78px;
+  border-bottom: 2px solid #EEEEEE;
+  z-index: -1;
+}
+
+.topbarTitle{
+  color: #FFC90E;
+  margin-left: 100px;
+  font-family: Arial;
+}
+
+.canvas{
+  position: absolute;
+  top: 80px;
+  left: 70px;
+  z-index: -2;
+  padding: 30px;
+  width: 85vw;
+  overflow-y: auto;
+}
+
+.deviceObjectContainer{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  
+  border: 2px solid #EEEEEE;
+  width: 100%;
+  color: #FFC90E;
+  margin-bottom: 10px;
+  font-family: Arial;
+  border-radius: 10px;
+  padding: 15px 10px 15px 10px;
+  background-color: white;
+}
+
+.deviceName{
+  display: inline-block;
+  margin-left: 15px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  font-size: 30px;
+}
+
+.deviceID{
+  display: inline-block;
+  margin-left: 20px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  font-size: 15px;
+  color: #DDDDDD;
+}
+
+.compositeDeviceIcon{
+  margin: 0px;
+  margin-left: auto;
+  padding: 5px;
+  border-radius: 5px;
+  background-color: #FFC90E;
+  color: white;
+}

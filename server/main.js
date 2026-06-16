@@ -127,10 +127,11 @@ apiRouter.post(
   }
 );
 
+//This should accept either device secret, viewing secret or user credentials
 apiRouter.get(
   "/device/:deviceID",
   deviceIDParameterValid,
-  deviceSecretAuthentication,
+  //deviceSecretAuthentication,
   async (request, response) => {
     try{
       const [deviceNameResult, tableResult] = await Promise.all([
@@ -147,6 +148,18 @@ apiRouter.get(
         deviceName: deviceNameResult[QUERY_RESULT][0].deviceName,
         table: tableResult[QUERY_RESULT],
       });
+    }catch(err){
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});      
+      throw err;
+    }
+});
+
+apiRouter.get(
+  "/devices",
+  async (request, response) => {
+    try{
+      const [devices] = await honeycombDBConnectionPool.execute("SELECT deviceID, deviceName, isCompositeDevice FROM Device");
+      response.send({devices: devices});
     }catch(err){
       response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});      
       throw err;

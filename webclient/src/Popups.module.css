@@ -1,0 +1,48 @@
+.backgroundFill{
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  inset: 0px;
+  margin: 0px;
+  padding: 0px;
+  
+  align-items: center;
+  justify-content: center;
+  
+  display: flex;
+  background-color: rgba(0, 0, 0, 0.5);
+  
+  z-index: 1;
+}
+
+.popupErrorWindow{
+  position: relative;
+  margin: 0;
+  padding: 10px;
+  font-family: Arial;
+  color: #ED0025;
+  background-color: white;
+
+  max-width: 75%;
+
+  align-items: center;
+  justify-content: center;
+  
+  display: inline-flex;
+  flex-direction: column;
+  border-radius: 10px;
+}
+
+.acceptErrorButton{  
+  color: white;
+  background-color: #ED0025;
+  margin: 0px;
+  margin-bottom: 10px;
+  padding: 10px 10px 10px 10px;
+  border: 0px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+.warningText{
+}
