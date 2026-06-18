@@ -1,5 +1,10 @@
 START TRANSACTION;
 
+/*
+  SHA512 Hashes output 64 bytes, but a byte needs 2 characters for hex, hence 128 bytes
+  similarly, salts are 16 bytes, hex string representation is 32 bytes
+*/
+
 CREATE TABLE Device(
   deviceID INT(64) PRIMARY KEY AUTO_INCREMENT,
   saltedDeviceSecret VARCHAR(128),
@@ -7,6 +12,32 @@ CREATE TABLE Device(
   deviceSecretSalt VARCHAR(32),
   deviceName VARCHAR(32),
   isCompositeDevice BOOL NOT NULL
+);
+
+CREATE TABLE UserObject(
+  id INT(64) PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(48) UNIQUE NOT NULL,
+  saltedPassword VARCHAR(128) NOT NULL,
+  salt VARCHAR(32) NOT NULL,
+  name VARCHAR(32) NOT NULL
+);
+
+CREATE TABLE UserObjectDevice(
+  deviceID INT(64) REFERENCES Device(deviceID),
+  userID INT(64) REFERENCES UserObject(id),
+  PRIMARY KEY (deviceID, userID)
+);
+
+/*
+  password: jane.doe
+  salt: 6d16e989de5314f3eff5e0c4a24c2bf0
+  sha512(password+salt): 
+*/
+INSERT INTO UserObject(email, saltedPassword, salt, name) VALUES(
+  "jane.doe@example.com",
+  "2229cb547700c3c1c90de6ef001e2f5f5c4e8c33fbed96cb542b0163cf92534cb18986ea6a510ee641d2ac421f3b50fe92e8367eb9969518fa5bf7de956bfca0",
+  "6d16e989de5314f3eff5e0c4a24c2bf0",
+  "Jane Doe"
 );
 
 /*

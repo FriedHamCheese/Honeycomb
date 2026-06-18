@@ -52,6 +52,7 @@ export async function createInitialDeviceTable(
   
   const finalTableAttributes = "__datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT, " + sqlTableAttributes;
   const createTableQuery = `CREATE TABLE ${deviceIDStr}_0 (${finalTableAttributes});`; 
+  await honeycombDBConnection.execute(createTableQuery);
   return warnings;
 }
 

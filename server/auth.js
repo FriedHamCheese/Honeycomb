@@ -1,4 +1,6 @@
 import {honeycombDBConnectionPool} from './sqlConnectionPool.js';
+
+import {uuidv7} from 'uuidv7';
 import {createHash}  from 'node:crypto'
 
 const INCLUDE_FIRST_CHARACTER = 0;
@@ -9,10 +11,14 @@ export const MAX_DEVICE_SECRET_CHARACTERS = 64;
 const HTTP_STATUS_FOR_BAD_REQUEST = 400; 
 const HTTP_STATUS_FOR_UNAUTHORIZED = 401;
 
-export function saltRehashDeviceSecret(deviceSecret, saltStr){
+export function saltAndRehash(secret, saltStr){
   const sha512Hash = createHash('sha512');
-  sha512Hash.update(deviceSecret + saltStr);
+  sha512Hash.update(secret + saltStr);
   return sha512Hash.digest('hex');
+}
+
+export function saltRehashDeviceSecret(deviceSecret, saltStr){
+  return saltAndRehash(deviceSecret, saltStr);
 }
 
 export function deviceIDParameterValid(request, response, nextRouter){
@@ -63,4 +69,19 @@ export async function deviceSecretAuthentication(request, response, nextRouter){
     return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Device secret mismatch."});
   
   nextRouter();
+}
+
+const userLoginCache = [];
+
+const USER_TOKEN_CHARACTERS = 32+4;
+export function getCachedLogin(userToken){
+  if(typeof(userToken) !== "string") return undefined;
+  if(userToken.length !== USER_TOKEN_CHARACTERS) return undefined;
+  return userLoginCache.find((login) => login.token === userToken);
+}
+
+export function saveToLoginCache(email){
+  const loginToken = String(uuidv7());
+  userLoginCache.push({email: email, token: loginToken});
+  return loginToken;
 }
