@@ -1,18 +1,27 @@
 import {MainSideNavbar} from './mainSideNavbar.jsx';
 import {ErrorPopup} from './Popups.jsx';
+import {userSessionToken} from './globals.jsx';
 
 import {useState, useEffect} from 'react';
 import {useNavigate} from 'react-router';
 import styles from './Home.module.css';
 
-function Home({APIBaseURL, selectedPage, baseRedirectToDeviceLink, paramsForMainSideNavbar}) {  
+function Home({APIBaseURL, selectedPage, baseRedirectToDeviceLink, URLToLoginPage, paramsForMainSideNavbar}){  
+  const navigate = useNavigate();
+
   const [devices, setDevices] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  
+  if(!userSessionToken) navigate(URLToLoginPage);
   
   async function getDevices(){
     let response;
     try{
-      response = await fetch(`${APIBaseURL}/apiv1/devices`);
+      response = await fetch(`${APIBaseURL}/apiv1/user/devicePreviews`, {
+        headers: {
+          'Authorization': userSessionToken
+        }
+      });
     }catch(err){
       if(err instanceof TypeError) return setErrorMessage("Unable to connect to server.");
       setErrorMessage(String(err));
@@ -38,9 +47,7 @@ function Home({APIBaseURL, selectedPage, baseRedirectToDeviceLink, paramsForMain
   useEffect(() => {
     getDevices();
   }, callOnRerender);
-  
-  const navigate = useNavigate();
-  
+    
   return (
     <div>
       <ErrorPopup text={errorMessage} closeSelf={() => setErrorMessage("")}/>

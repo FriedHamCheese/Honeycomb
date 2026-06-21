@@ -18,7 +18,8 @@ export async function registerDevice(
   deviceSecret,
   viewingSecret,
   deviceName,
-  isCompositeDevice
+  isCompositeDevice,
+  ownerUserID,
 ){
   const SALT_SIZE_BYTES = 16;
   const salt = randomBytes(SALT_SIZE_BYTES).toString('hex');
@@ -26,9 +27,9 @@ export async function registerDevice(
   const saltedViewingSecret = saltRehashDeviceSecret(viewingSecret, salt);
   
   const [insertionResult] = await honeycombDBConnection.execute(
-    "INSERT INTO Device (saltedDeviceSecret, saltedViewingSecret, deviceSecretSalt, deviceName, isCompositeDevice) VALUES (?,?,?,?,?)",
-    [storingDeviceSecret, saltedViewingSecret, salt, deviceName, isCompositeDevice]
-  )
+    "INSERT INTO Device (saltedDeviceSecret, saltedViewingSecret, deviceSecretSalt, deviceName, isCompositeDevice, ownerUserID) VALUES (?,?,?,?,?,?)",
+    [storingDeviceSecret, saltedViewingSecret, salt, deviceName, isCompositeDevice, ownerUserID]
+  );
   const deviceID = insertionResult.insertId;
   return deviceID;
 }
@@ -44,6 +45,10 @@ export async function createInitialDeviceTable(
   If there are no warnings, empty string is returned.
   */
   
+  delete objectFromRequest.__deviceName;
+  delete objectFromRequest.__deviceSecret;
+  delete objectFromRequest.__deviceViewingSecret;
+  
   const {sqlTableAttributes, warnings} = parseBodyToSQLTableAttributes(
     objectFromRequest,
     MIN_COLUMN_NAME_CHARACTERS,
@@ -52,6 +57,7 @@ export async function createInitialDeviceTable(
   
   const finalTableAttributes = "__datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT, " + sqlTableAttributes;
   const createTableQuery = `CREATE TABLE ${deviceIDStr}_0 (${finalTableAttributes});`; 
+  await honeycombDBConnection.execute(createTableQuery);
   return warnings;
 }
 

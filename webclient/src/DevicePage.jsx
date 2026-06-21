@@ -1,16 +1,20 @@
 import {MainSideNavbar} from './mainSideNavbar.jsx';
 import {ErrorPopup} from './Popups.jsx';
+import {userSessionToken} from './globals.jsx';
 
 import {useState, useEffect} from 'react';
 import {useNavigate, useParams} from 'react-router';
 import styles from './DevicePage.module.css';
 
-function DevicePage({APIBaseURL, redirectToDeviceID, selectedPage, paramsForMainSideNavbar}) {
+function DevicePage({APIBaseURL, redirectToLogin, selectedPage, paramsForMainSideNavbar}) {
   const linkParameters = useParams();  
   const [errorMessage, setErrorMessage] = useState();
   const [deviceObject, setDeviceObject] = useState();
   const [deviceDataLabels, setDeviceDataLabels] = useState([]);
   const [deviceRows, setDeviceRows] = useState([]);
+  const navigate = useNavigate();
+  
+  if(!userSessionToken) navigate(redirectToLogin);
   
   function DatapointContainer({datapoint}){
     return(
@@ -23,7 +27,11 @@ function DevicePage({APIBaseURL, redirectToDeviceID, selectedPage, paramsForMain
   async function getDeviceInfo(){
     let response;
     try{
-      response = await fetch(`${APIBaseURL}/apiv1/device/${linkParameters.deviceIDStr}`);
+      response = await fetch(`${APIBaseURL}/apiv1/device/${linkParameters.deviceIDStr}`, {
+        headers:{
+          authorization: userSessionToken
+        }
+      });
     }catch(err){
       if(err instanceof TypeError)
         return setErrorMessage("Couldn't connect to server.");
