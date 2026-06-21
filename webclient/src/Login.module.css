@@ -1,0 +1,108 @@
+.background{
+  background-color: #FFC90E;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loginBox{
+  background-color: white;
+  color: #FFC90E;
+  border-radius: 10px;
+  padding: 50px;
+  margin: 0;
+  margin-top: -50px;
+  
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+  font-family: Arial;
+  width: 50vw;
+  max-width: 500px;
+}
+
+.brandDiv{
+  display: flex;
+  margin: 0px;
+  padding: 0px;
+  
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon{
+  width: 50px;
+}
+
+.welcomeText{
+  margin-left: 20px;
+  font-weight: bold;
+  font-size: 20px;
+}
+
+.emailInput{
+  border: 1px solid #EEEEEE;
+  border-radius: 5px;
+  padding: 10px;
+  color: #222222;
+  font-size: 16px;
+  margin-bottom: 15px;
+  width: 100%;
+}
+
+.passwordInput{
+  border: 1px solid #EEEEEE;
+  border-radius: 5px;
+  padding: 10px;
+  color: #222222;
+  font-size: 16px;
+  margin-bottom: 15px; 
+  width: 100%;
+}
+
+.loginButton{
+  background-color: #FFC90E;
+  color: #FFFFFF;
+  padding: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  margin: 0;
+  width: 50%;
+}
+
+.errorDiv{
+  color: #ED0025;
+  margin-bottom: 10px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.errorIcon{
+  margin: 0;
+  padding: 0;
+}
+
+.errorText{
+  margin: 0;
+  margin-left: 10px;
+  padding: 0;
+  padding-top: 1px;
+}
+
+.registerLink{
+  color: #00A2E8;
+  margin: 0;
+  padding: 0;
+  margin-bottom: 10px;
+}
