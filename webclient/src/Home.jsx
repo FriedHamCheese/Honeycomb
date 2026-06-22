@@ -1,16 +1,19 @@
 import {MainSideNavbar} from './mainSideNavbar.jsx';
+import {CreateDevicePopup} from './CreateDevicePopup.jsx';
 import {ErrorPopup} from './Popups.jsx';
 import {userSessionToken} from './globals.jsx';
 
 import {useState, useEffect} from 'react';
 import {useNavigate} from 'react-router';
 import styles from './Home.module.css';
+import {BsQuestionCircle, BsPlusSquareFill } from "react-icons/bs";
 
 function Home({APIBaseURL, selectedPage, baseRedirectToDeviceLink, URLToLoginPage, paramsForMainSideNavbar}){  
   const navigate = useNavigate();
 
   const [devices, setDevices] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showCreateDevicePopup, setShowCreateDevicePopup] = useState(false);
   
   if(!userSessionToken) navigate(URLToLoginPage);
   
@@ -50,10 +53,19 @@ function Home({APIBaseURL, selectedPage, baseRedirectToDeviceLink, URLToLoginPag
     
   return (
     <div>
+      {
+        showCreateDevicePopup && 
+        <CreateDevicePopup 
+          APIBaseURL={APIBaseURL} closeSelf={() => setShowCreateDevicePopup(false)}
+        />
+      }
       <ErrorPopup text={errorMessage} closeSelf={() => setErrorMessage("")}/>
       <MainSideNavbar selectedPage={selectedPage} params={paramsForMainSideNavbar}/>
       <div className={styles.topbar}>
         <h1 className={styles.topbarTitle}>Devices</h1>
+        <button className={styles.addDeviceButton} onClick={() => setShowCreateDevicePopup(true)}>
+          <BsPlusSquareFill/>
+        </button>
       </div>
       <div className={styles.canvas}>
         {

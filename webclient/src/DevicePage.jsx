@@ -4,9 +4,10 @@ import {userSessionToken} from './globals.jsx';
 
 import {useState, useEffect} from 'react';
 import {useNavigate, useParams} from 'react-router';
+
 import styles from './DevicePage.module.css';
 
-function DevicePage({APIBaseURL, redirectToLogin, selectedPage, paramsForMainSideNavbar}) {
+export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, paramsForMainSideNavbar}) {
   const linkParameters = useParams();  
   const [errorMessage, setErrorMessage] = useState();
   const [deviceObject, setDeviceObject] = useState();
@@ -103,5 +104,3 @@ function DevicePage({APIBaseURL, redirectToLogin, selectedPage, paramsForMainSid
     </div>
   );
 }
-
-export default DevicePage;

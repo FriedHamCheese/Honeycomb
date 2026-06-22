@@ -6,12 +6,33 @@
   height: 78px;
   border-bottom: 2px solid #EEEEEE;
   z-index: -1;
+  
+  display: flex;
+  flex-direction: row;
+  align-items: center;
 }
 
 .topbarTitle{
   color: #FFC90E;
+  margin: 0;
   margin-left: 100px;
+  padding-bottom: 3px;
   font-family: Arial;
+  display: inline-block;
+}
+
+.addDeviceButton{
+  background-color: white;
+  color: #FFC90E;
+  border: 0;
+  margin: 0;
+  margin-left: 20px;
+  padding: 0;
+  height: 30px;
+  width: 30px;
+  vertical-align: center;
+  text-align: center;
+  font-size: 27px;
 }
 
 .canvas{

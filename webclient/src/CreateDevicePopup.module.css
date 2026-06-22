@@ -1,0 +1,216 @@
+.popupBackground{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  z-index: 2;
+}
+
+.popupBox{
+  width: 50%;
+  height: 50%;
+  
+  background-color: white;
+  padding: 50px;
+  padding-bottom: 30px;
+  border-radius: 20px;
+}
+
+.popupCloseButton{
+  float: right;
+  background-color: white;
+  color: #FFC90E;
+  font-weight: bold;
+  font-size: 16px;
+  border: 0;
+}
+
+.popupTitle{
+  text-align: center;
+  font-family: Arial;
+  color: #FFC90E;
+  margin-bottom: 50px;
+}
+
+.createDeviceInputIconDiv{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: 15px;
+  justify-content: space-between;
+}
+
+.createDeviceInput{
+  margin: 0;
+  border: 1px solid #EEEEEE;
+  border-radius: 5px;
+  padding: 10px;
+  color: #222222;
+  font-size: 16px;
+  width: 80%;
+}
+
+.createDeviceHelpIcon{
+  margin: 0;
+  padding: 0;
+  margin-left: 15px;
+  color: #FFC90E;
+  border: 0;
+  background-color: white;
+  font-size: 20px;
+}
+
+.createDeviceHelpPopup{
+  position: absolute;
+  width: 200px;
+
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  
+  font-family: Arial;
+  font-size: 14px;
+  background-color: white;
+  color: #AAAAAA;
+  
+  z-index: 3;
+}
+
+.nextPopupPageButton{
+  float: right;
+  
+  color: #FFC90E;
+  background-color: rgba(0,0,0,0);
+  width: 50px;
+  height: 50px;
+  font-size: 45px;
+  padding: 0;
+  margin: 0;
+  margin-left: 10px;
+  text-align: center;
+  vertical-align: center;
+  border: 0;
+}
+
+.nextPopupPageButtonDisabled{
+  float: right;
+  
+  color: #EEEEEE;
+  background-color: rgba(0,0,0,0);
+  width: 50px;
+  height: 50px;
+  font-size: 45px;
+  padding: 0;
+  margin: 0;
+  margin-left: 10px;
+  text-align: center;
+  vertical-align: center;
+  border: 0;
+}
+
+.previousPopupPageButton{
+  float: right;
+  
+  color: #FFC90E;
+  background-color: rgba(0,0,0,0);
+  width: 50px;
+  height: 50px;
+  font-size: 45px;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  vertical-align: center;  
+  border: 0;
+}
+
+.previousPopupPageButtonDisabled{
+  float: right;
+  
+  color: #EEEEEE;
+  background-color: rgba(0,0,0,0);
+  width: 50px;
+  height: 50px;
+  font-size: 45px;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+  vertical-align: center;  
+  border: 0;
+}
+
+.addDataElementButton{
+  background-color: rgba(0,0,0,0);
+  color: #FFC90E;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  font-size: 25px;
+  border: 0;
+  margin: 0;
+  margin-top: 10px;
+  margin-left: 12.5%;
+}
+
+.dataTable{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  
+  width: 100%;
+  height: 50%;
+  overflow-y: auto;
+}
+
+.dataTableHeader{
+  box-sizing: border-box;
+  
+  font-family: Arial;
+  font-size: 16px;
+  display: inline-block;
+  color: #444444;
+  width: 30%;
+  text-align: center;
+  border: 1px solid #EEEEEE;
+  padding: 10px;
+  margin: 0;
+}
+
+.dataElementRemoveButton{
+  background-color: rgba(0,0,0,0);
+  color: #ED0025;
+  font-weight: bold;
+  border: 0;
+}
+
+.successPageMainDiv{
+  background-color: #FFC90E;
+  color: white;
+  border-radius: 10px;
+  
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px;
+  
+  width: 90%;
+  height: 50%;
+  
+  font-family: Arial;
+  font-size: 24px;
+  #font-weight: bold;
+  text-align: center;
+}
+
+.successPageCheckmark{
+  font-size: 60px;
+}
