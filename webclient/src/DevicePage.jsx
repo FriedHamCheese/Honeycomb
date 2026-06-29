@@ -1,21 +1,23 @@
 import {MainSideNavbar} from './mainSideNavbar.jsx';
 import {ErrorPopup} from './Popups.jsx';
-import {userSessionToken} from './globals.jsx';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 import {useNavigate, useParams} from 'react-router';
 
 import styles from './DevicePage.module.css';
 
-export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, paramsForMainSideNavbar}) {
+export default function DevicePage({
+  APIBaseURL, URLToLoginPage, selectedPage, paramsForMainSideNavbar, getUserSessionToken, clearUserSessionToken
+}) {
   const linkParameters = useParams();  
-  const [errorMessage, setErrorMessage] = useState();
+  const [errorMessage, setErrorMessage] = useState("");
   const [deviceObject, setDeviceObject] = useState();
+  const [datapoints, setDatapoints] = useState();
+  
   const [deviceDataLabels, setDeviceDataLabels] = useState([]);
   const [deviceRows, setDeviceRows] = useState([]);
+  const [refreshObject, setRefreshObject] = useState({});
   const navigate = useNavigate();
-  
-  if(!userSessionToken) navigate(redirectToLogin);
   
   function DatapointContainer({datapoint}){
     return(
@@ -39,14 +41,17 @@ export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, p
       return setErrorMessage(String(err));
     }
     
+    const invalidSessionToken = response.status === 401;
+    if(invalidSessionToken) navigate(URLToLoginPage);
+    
     if(!(response.ok))
       return setErrorMessage(`Received HTTP status ${response.status} from server.`);
     
     try{
       const objectFromResponse = await response.json();
-      const noDatapoints = objectFromResponse.table.length < 1;
-      if(noDatapoints) return setDeviceDataLabels([]);
-      
+      if(!(objectFromResponse.table instanceof Array))
+        return setErrorMessage(".table attribute from server not array type.");
+
       setDeviceObject(objectFromResponse);
       setDeviceDataLabels(Object.keys(objectFromResponse.table[0]));
     }catch(err){
@@ -54,13 +59,19 @@ export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, p
         return setErrorMessage("Could not read response.");
       if(err instanceof TypeError)
         return setErrorMessage("Cannot parse response as JSON.");
-      setErrorMessage(String(err));
+      return setErrorMessage(String(err));
     }
+    setErrorMessage("");
   }
   
   function getDatapointsAlignedToDataLabels(deviceTable, dataLabels){
     const alignedDatapoints = [];
     for(const datapoint of deviceTable){
+      if(!(datapoint instanceof Object)){
+        console.log(`$Datapoint {datapoint} not Object, skipping...`);
+        continue;
+      }
+      
       const alignedDatapoint = [];
       for(const dataLabel of dataLabels)
         alignedDatapoint.push(datapoint[dataLabel]); 
@@ -70,20 +81,42 @@ export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, p
   }
   
   const callOnRerender = [];
+  useEffect(() => {getDeviceInfo()}, callOnRerender);
+
   useEffect(() => {
-    getDeviceInfo();
-  }, callOnRerender);
+    const msPerRefresh = 2000;
+    const timerID = setTimeout(function (){
+      getDeviceInfo();
+      setRefreshObject({});
+    }, msPerRefresh);
+
+    return function (){clearTimeout(timerID);}
+  }, [refreshObject]);
   
   useEffect(() => {
     if(!deviceObject) return;
+    if(!deviceObject.table !== datapoints)
+      setDatapoints(deviceObject.table);
+    
     setDeviceRows(getDatapointsAlignedToDataLabels(deviceObject.table, deviceDataLabels));
   }, [deviceObject])
 
-  if(!deviceObject) return;
+  const DatapointsVisual = useMemo(function (){
+    return deviceRows.map((datapoint) => <DatapointContainer datapoint={datapoint}/>)
+  }, [deviceRows]);
+
+  const nothingToDisplay = !deviceObject && !errorMessage;
+  if(nothingToDisplay) return;
   
   return (
     <div>
-      <MainSideNavbar selectedPage={selectedPage} params={paramsForMainSideNavbar}/>
+      {<ErrorPopup text={errorMessage} closeSelf={async () => {
+        setErrorMessage("");
+        getDeviceInfo();
+      }}/>}
+      <MainSideNavbar 
+        selectedPage={selectedPage} params={paramsForMainSideNavbar} clearUserSessionToken={clearUserSessionToken}
+      />
       <div className={styles.topbar}>
         <h1 className={styles.topbarTitle}>{deviceObject.deviceName}</h1>
         <p className={styles.deviceID}>device ID: {linkParameters.deviceIDStr}</p>
@@ -97,7 +130,7 @@ export default function DevicePage({APIBaseURL, redirectToLogin, selectedPage, p
             </tr>
           </thead>
           <tbody>
-            {deviceRows.map((datapoint) => <DatapointContainer datapoint={datapoint}/>)}
+            {DatapointsVisual}
           </tbody>
         </table>
       </div>
