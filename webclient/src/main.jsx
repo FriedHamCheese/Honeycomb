@@ -6,6 +6,8 @@ import {Helmet} from 'react-helmet';
   - logout button
   - composite device addition
   - loading states
+  - websocket or webhook for device previews and datapoints
+  - get user details during login
 */
 
 createRoot(document.getElementById('root')).render(

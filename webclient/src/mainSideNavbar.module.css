@@ -5,6 +5,10 @@
   width: 80px; 
   height: 100vh;
   border-right: 2px solid #EEEEEE;
+  
+  display: inline-flex;
+  align-items: center;
+  flex-direction: column;
 }
 
 .honeycombIcon{
@@ -27,4 +31,40 @@
   height: 80px;
   padding: 5px;
   background-color: #FFC90E;
+}
+
+.profileButton{
+  width: 50px;
+  height: 50px;
+  border-radius: 30px;
+  padding: 0;
+  border: 0;
+  margin-top: 20px;
+}
+
+.profileMenu{
+  position: absolute;
+  inset: 0;
+  background: #F8F8F8;
+  border: 0;
+  width: 200px;
+  height: 100px;
+  border-radius: 5px;
+}
+
+.profileMenuUsername{
+  font-family: Arial;
+  font-weight: bold;
+  font-size: 14px;
+  padding: 10px 20px 10px 20px;
+}
+
+.profileMenuButton{
+  font-family: Arial;
+  font-size: 14px;
+  border: 0;
+  text-align: center;
+  width: 100%;
+  background-color: rgba(0,0,0,0);
+  color: #ED0025;
 }

@@ -10,9 +10,8 @@ import {BsQuestionCircle, BsPlusSquareFill } from "react-icons/bs";
 function Home({
   APIBaseURL, 
   selectedPage, 
-  baseURLToDevicePage, 
   URLToLoginPage, 
-  paramsForMainSideNavbar, 
+  baseURLToDevicePage,
   getUserSessionToken, 
   clearUserSessionToken
 }){  
@@ -94,7 +93,7 @@ function Home({
       }
       <ErrorPopup text={errorMessage} closeSelf={() => setErrorMessage("")}/>
       <MainSideNavbar 
-        selectedPage={selectedPage} params={paramsForMainSideNavbar} clearUserSessionToken={clearUserSessionToken}
+        URLToLoginPage={URLToLoginPage} clearUserSessionToken={clearUserSessionToken}
       />
       <div className={styles.topbar}>
         <h1 className={styles.topbarTitle}>Devices</h1>

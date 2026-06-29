@@ -7,7 +7,7 @@ import {useNavigate, useParams} from 'react-router';
 import styles from './DevicePage.module.css';
 
 export default function DevicePage({
-  APIBaseURL, URLToLoginPage, selectedPage, paramsForMainSideNavbar, getUserSessionToken, clearUserSessionToken
+  APIBaseURL, URLToLoginPage, getUserSessionToken, clearUserSessionToken
 }) {
   const linkParameters = useParams();  
   const [errorMessage, setErrorMessage] = useState("");
@@ -32,7 +32,7 @@ export default function DevicePage({
     try{
       response = await fetch(`${APIBaseURL}/apiv1/device/${linkParameters.deviceIDStr}`, {
         headers:{
-          authorization: userSessionToken
+          authorization: getUserSessionToken()
         }
       });
     }catch(err){
@@ -53,7 +53,9 @@ export default function DevicePage({
         return setErrorMessage(".table attribute from server not array type.");
 
       setDeviceObject(objectFromResponse);
-      setDeviceDataLabels(Object.keys(objectFromResponse.table[0]));
+      if (objectFromResponse.table.length < 1)
+        setDeviceDataLabels([]);
+      else setDeviceDataLabels(Object.keys(objectFromResponse.table[0]));
     }catch(err){
       if(err instanceof TypeError)
         return setErrorMessage("Could not read response.");
@@ -115,25 +117,29 @@ export default function DevicePage({
         getDeviceInfo();
       }}/>}
       <MainSideNavbar 
-        selectedPage={selectedPage} params={paramsForMainSideNavbar} clearUserSessionToken={clearUserSessionToken}
+        URLToLoginPage={URLToLoginPage} clearUserSessionToken={clearUserSessionToken}
       />
-      <div className={styles.topbar}>
-        <h1 className={styles.topbarTitle}>{deviceObject.deviceName}</h1>
-        <p className={styles.deviceID}>device ID: {linkParameters.deviceIDStr}</p>
-      </div>
-      <div className={styles.canvas}>
-        <h2 className={styles.deviceDataHeader}>Device Data</h2>
-        <table style={{borderSpacing: 0}}>
-          <thead>
-            <tr className={styles.tableRow}>
-              {deviceDataLabels.map((dataLabel) => <th className={styles.table}>{dataLabel}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {DatapointsVisual}
-          </tbody>
-        </table>
-      </div>
+      {
+        deviceObject && <div>
+          <div className={styles.topbar}>
+            <h1 className={styles.topbarTitle}>{deviceObject.deviceName}</h1>
+            <p className={styles.deviceID}>device ID: {linkParameters.deviceIDStr}</p>
+          </div>
+          <div className={styles.canvas}>
+            <h2 className={styles.deviceDataHeader}>Device Data</h2>
+            <table style={{borderSpacing: 0}}>
+              <thead>
+                <tr className={styles.tableRow}>
+                  {deviceDataLabels.map((dataLabel) => <th className={styles.table}>{dataLabel}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {DatapointsVisual}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
     </div>
   );
 }
