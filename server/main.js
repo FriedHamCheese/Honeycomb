@@ -12,10 +12,26 @@ import {
   saveToLoginCache,
   getCachedLogin,
   checkCachedLoginMiddleware,
-  MAX_DEVICE_SECRET_CHARACTERS,
-  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
-  MAX_DEVICE_ID_CHARACTERS,
 } from './auth.js';
+
+import {
+  FIRST_CHARACTER,
+  MIN_USERNAME_CHARACTERS,
+  MIN_USER_EMAIL_CHARACTERS,
+  MIN_USER_PASSWORD_CHARACTERS,
+  
+  MAX_USER_EMAIL_CHARACTERS,
+  MAX_USER_PASSWORD_CHARACTERS,
+  MAX_USERNAME_CHARACTERS,
+  
+  GENERATED_USER_RAW_SALT_BYTES,
+  
+  HTTP_STATUS_FOR_OK,
+  HTTP_STATUS_FOR_CREATED,
+  HTTP_STATUS_FOR_BAD_REQUEST,
+  HTTP_STATUS_FOR_UNAUTHORIZED,
+  HTTP_STATUS_FOR_SERVER_ERROR,
+} from '../constraints.js';
 
 import {randomBytes} from 'node:crypto';
 
@@ -29,34 +45,38 @@ app.use(express.json({limit: "1kb"}))
 app.use(cors());
 const apiRouter = express.Router();
 
-const HTTP_STATUS_FOR_OK = 200;
-const HTTP_STATUS_FOR_CREATED = 201;
-const HTTP_STATUS_FOR_BAD_REQUEST = 400; 
-const HTTP_STATUS_FOR_UNAUTHORIZED = 401;
-const HTTP_STATUS_FOR_SERVER_ERROR = 500;
-
-const INCLUDE_FIRST_CHARACTER = 0;
-const MIN_DEVICE_NAME_CHARACTERS = 1;
-const MAX_DEVICE_NAME_CHARACTERS = 32;
-
 apiRouter.get(
   "/user/devicePreviews",
   checkCachedLoginMiddleware,
   async (request, response) => {
+    /*
+    Input:
+    - Authorization: userSessionToken, uuidv7-hex
+    
+    Returns:
+    - {
+      devices: [
+        {
+          deviceID: int(64),
+          deviceName: str[1-32],
+          isCompositeDevice: int(1)
+        },
+        ...
+      ]
+    }, with HTTP status 200
+    - HTTP status 401 if session token from Authorization is invalid
+    - HTTP status 500 for undocumented server errors
+    */
     try{
       const [devices] = await honeycombDBConnectionPool.execute(
         "SELECT deviceID, deviceName, isCompositeDevice FROM Device WHERE ownerUserID = ?", [request.cachedLogin.userID]
       );
       response.send({devices: devices});
     }catch(err){
-      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});      
-      throw err;
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send();
+      console.log(err);
     }
 });
-
-const MAX_USER_EMAIL_CHARACTERS = 48;
-const MAX_USER_PASSWORD_CHARACTERS = 32;
-const MAX_USER_NAME_CHARACTERS = 32;
 
 apiRouter.post(
   "/user/register",
@@ -67,38 +87,69 @@ apiRouter.post(
       name: str[1-32]
       password: str[8-32]
     }
+    
+    Returns:
+    - HTTP status 201 if user registered successfully
+    - HTTP status 400 with {error: error message (str)} if information for registration is not ok
+    - HTTP status 500 for undocumented server errors
     */
     
-    const truncatedEmail = request.body.email.trim().substr(INCLUDE_FIRST_CHARACTER, MAX_USER_EMAIL_CHARACTERS);
-    const truncatedPassword = request.body.password.substr(INCLUDE_FIRST_CHARACTER, MAX_USER_PASSWORD_CHARACTERS);
-    const truncatedName = request.body.name.trim().substr(INCLUDE_FIRST_CHARACTER, MAX_USER_NAME_CHARACTERS);
+    const {email, password, name} = request.body;
     
-    const [userObjectWithSameEmailResult, userObjectWithSameNameResult] = await Promise.all([
-      honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE email = ?", [truncatedEmail]),
-      honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE name = ?", [truncatedName]),
-    ]);
+    if((typeof email) !== "string")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".email attribute not string type"});
+    if((typeof password) !== "string")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".password attribute not string type"});
+    if((typeof name) !== "string")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".name attribute not string type"});
+  
+    const truncatedEmail = email.substr(FIRST_CHARACTER, MAX_USER_EMAIL_CHARACTERS).trim();
+    const truncatedPassword = password.substr(FIRST_CHARACTER, MAX_USER_PASSWORD_CHARACTERS).trim();
+    const truncatedName = name.substr(FIRST_CHARACTER, MAX_USERNAME_CHARACTERS).trim();
     
-    const QUERY_RESULT = 0;
-    const userObjectWithSameEmail = userObjectWithSameEmailResult[QUERY_RESULT];
-    const userObjectWithSameName = userObjectWithSameNameResult[QUERY_RESULT];
+    if(truncatedEmail.length < MIN_USER_EMAIL_CHARACTERS) 
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+        error: `Email field require at least ${MIN_USER_EMAIL_CHARACTERS} characters.`
+      });
+    if(truncatedPassword.length < MIN_USER_PASSWORD_CHARACTERS) 
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+        error: `Password field require at least ${MIN_USER_PASSWORD_CHARACTERS} characters.`
+      });   
+    if(truncatedName.length < MIN_USERNAME_CHARACTERS) 
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+        error: `Name field require at least ${MIN_USERNAME_CHARACTERS} characters.`
+      });  
     
-    const userAlreadyExists = userObjectWithSameEmail.length > 0;
-    const duplicateName = userObjectWithSameName.length > 0;
-    if(userAlreadyExists) 
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Email taken"});
-    if(duplicateName)
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Name taken"});
-    
-    const USER_PASSWORD_SALT_BYTES = 32/2;
-    const saltStr = randomBytes(USER_PASSWORD_SALT_BYTES).toString('hex');
-    const saltedUserPassword = saltAndRehash(truncatedPassword, saltStr);
-    
-    const [insertionResult] = await honeycombDBConnectionPool.execute(
-      "INSERT INTO UserObject(email, saltedPassword, salt, name) VALUES (?,?,?,?)",
-      [truncatedEmail, saltedUserPassword, saltStr, truncatedName]
-    );
-    
-    response.send({message: `User registered with user ID ${insertionResult.insertId}.`});
+    try{
+      const [userObjectWithSameEmailResult, userObjectWithSameNameResult] = await Promise.all([
+        honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE email = ?", [truncatedEmail]),
+        honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE name = ?", [truncatedName]),
+      ]);
+      
+      const QUERY_RESULT = 0;
+      const userObjectWithSameEmail = userObjectWithSameEmailResult[QUERY_RESULT];
+      const userObjectWithSameName = userObjectWithSameNameResult[QUERY_RESULT];
+  
+      if(userObjectWithSameEmail.length) 
+        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Email taken"});
+      if(userObjectWithSameName.length)
+        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Name taken"});
+      
+      const saltStr = randomBytes(GENERATED_USER_RAW_SALT_BYTES).toString('hex');
+      const saltedUserPassword = saltAndRehash(truncatedPassword, saltStr);
+      
+      const [insertionResult] = await honeycombDBConnectionPool.execute(
+        "INSERT INTO UserObject(email, saltedPassword, salt, name) VALUES (?,?,?,?)",
+        [truncatedEmail, saltedUserPassword, saltStr, truncatedName]
+      );
+      
+      response.status(HTTP_STATUS_FOR_CREATED).send({
+        message: `User registered with user ID ${insertionResult.insertId}.`
+      });
+    }catch(err){
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send();
+      console.log(err);
+    }
   }
 );
 
@@ -107,35 +158,49 @@ apiRouter.post(
   async (request, response) => {
     /*
     Input: 
-    Authorization: user uuid7 token
+    - Authorization: user uuid7-hex token
+    - if Authorization not valid:{
+        email: str[1-48]  
+        password: str[8-32]
+      }
     
-    if token not valid:
-    {
-      email: str[1-48]
-      password: str[8-32]
-    }
+    Returns:
+    - HTTP status 200 with .loginToken: uuidv7, str[32]
+    - HTTP status 400 with .error: str; if .email or .password not conforming to specified form
+    - HTTP status 401 with .error: str; if .email and .password combination incorrect
+    - HTTP status 500 for undocumented server errors
     */
     
     const userToken = request.get('Authorization');
     if(getCachedLogin(userToken)) 
       return response.status(HTTP_STATUS_FOR_OK).send({loginToken: userToken});  
   
-    const truncatedEmail = request.body.email.trim().substr(INCLUDE_FIRST_CHARACTER, MAX_USER_EMAIL_CHARACTERS);
-    const truncatedPassword = request.body.password.substr(INCLUDE_FIRST_CHARACTER, MAX_USER_PASSWORD_CHARACTERS);
+    const {email, password} = request.body;
+    if((typeof email) !== "string")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".email attribute not string type"});
+    if((typeof password) !== "string")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".password attribute not string type"});
     
-    const [matchingUser] = await honeycombDBConnectionPool.execute(
-      "SELECT salt, saltedPassword, id FROM UserObject WHERE email = ?",
-      [truncatedEmail]
-    );
-    const noUserWithEmail = matchingUser.length < 1;
-    if(noUserWithEmail)
-      return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "No user associated with email"});
-    const saltedPassword = saltAndRehash(truncatedPassword, matchingUser[0].salt);
-    if(saltedPassword !== matchingUser[0].saltedPassword)
-      return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Incorrect password"});
-    
-    const loginToken = saveToLoginCache(truncatedEmail, matchingUser[0].id);
-    return response.status(HTTP_STATUS_FOR_OK).send({loginToken: loginToken});
+    const truncatedEmail = email.substr(FIRST_CHARACTER, MAX_USER_EMAIL_CHARACTERS).trim();
+    const truncatedPassword = password.substr(FIRST_CHARACTER, MAX_USER_PASSWORD_CHARACTERS).trim();
+
+    try{
+      const [matchingUser] = await honeycombDBConnectionPool.execute(
+        "SELECT salt, saltedPassword, id FROM UserObject WHERE email = ?",
+        [truncatedEmail]
+      );
+      if(!matchingUser)
+        return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "No user associated with email"});
+      const saltedPassword = saltAndRehash(truncatedPassword, matchingUser[0].salt);
+      if(saltedPassword !== matchingUser[0].saltedPassword)
+        return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Incorrect password"});
+      
+      const loginToken = saveToLoginCache(truncatedEmail, matchingUser[0].id);
+      response.status(HTTP_STATUS_FOR_OK).send({loginToken: loginToken});
+    }catch(err){
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send();
+      console.log(err);
+    }
   }
 );
 

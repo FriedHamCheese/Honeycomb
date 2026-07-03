@@ -1,5 +1,4 @@
 import styles from './Register.module.css';
-import {setUserSessionToken} from './globals.jsx';
 
 import {BsBan} from 'react-icons/bs';
 import {useNavigate} from 'react-router';
@@ -20,8 +19,15 @@ export default function Login({APIBaseURL, URLToLoginPage}){
   const navigate = useNavigate();
   
   async function register(){
+    const truncatedName = nameInput.substr(FIRST_CHARACTER, MAX_NAME_CHARACTERS).trim();
+    const truncatedEmail = emailInput.substr(FIRST_CHARACTER, MAX_EMAIL_CHARACTERS).trim();
     const truncatedPassword = passwordInput.substr(FIRST_CHARACTER, MAX_PASSWORD_CHARACTERS).trim();
     const truncatedConfirmPassword = confirmPasswordInput.substr(FIRST_CHARACTER, MAX_PASSWORD_CHARACTERS).trim();
+    
+    if(!truncatedName) return setErrorMessage("Name field is empty.");
+    if(!truncatedEmail) return setErrorMessage("Email field is empty.");
+    if(!truncatedPassword) return setErrorMessage("Password field is empty.");
+    
     if(truncatedPassword != truncatedConfirmPassword)
       return setErrorMessage("Passwords do not match.");
     
@@ -33,8 +39,8 @@ export default function Login({APIBaseURL, URLToLoginPage}){
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          name: nameInput.substr(FIRST_CHARACTER, MAX_NAME_CHARACTERS).trim(),
-          email: emailInput.substr(FIRST_CHARACTER, MAX_EMAIL_CHARACTERS).trim(),
+          name: truncatedName,
+          email: truncatedEmail,
           password: truncatedPassword,
         })
       });
@@ -54,7 +60,6 @@ export default function Login({APIBaseURL, URLToLoginPage}){
         return setErrorMessage(objectFromResponse.error);
       navigate(URLToLoginPage);
     }catch(err){
-      console.log(err);
       if(err instanceof TypeError)
         return setErrorMessage("Couldn't read response from server.");
       if(err instanceof SyntaxError)
@@ -67,7 +72,10 @@ export default function Login({APIBaseURL, URLToLoginPage}){
   
   return (
     <div className={styles.background}>
-      <div className={styles.loginBox}>
+      <div className={styles.loginBox} onKeyDown={async function (htmlEvent){
+        const pressedEnterKey = htmlEvent.key === "Enter";
+        if(pressedEnterKey) await register();
+      }}>
         <div className={styles.brandDiv}>
           <img src="/honeycomb.png" className={styles.icon}/>
           <label className={styles.welcomeText}>Welcome to Honeycomb!</label>

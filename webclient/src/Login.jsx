@@ -1,11 +1,12 @@
 import styles from './Login.module.css';
-import {setUserSessionToken} from './globals.jsx';
 
 import {BsBan} from 'react-icons/bs';
 import {useNavigate} from 'react-router';
 import {useState} from 'react';
 
-export default function Login({APIBaseURL, baseURLForHomeRedirect, URLToRegisterPage}){
+export default function Login({
+  APIBaseURL, URLToHomePage, URLToRegisterPage, setUserSessionToken, getUserSessionToken
+}){
   const FIRST_CHARACTER = 0;
   const MAX_EMAIL_CHARACTERS = 48;
   const MAX_PASSWORD_CHARACTERS = 32;
@@ -17,6 +18,14 @@ export default function Login({APIBaseURL, baseURLForHomeRedirect, URLToRegister
   const navigate = useNavigate();
   
   async function login(){
+    const truncatedEmail = emailInput.substr(FIRST_CHARACTER, MAX_EMAIL_CHARACTERS).trim();
+    const truncatedPassword = passwordInput.substr(FIRST_CHARACTER, MAX_PASSWORD_CHARACTERS).trim();
+    const emailIsEmpty = !truncatedEmail;
+    const passwordIsEmpty = !truncatedPassword;
+    
+    if(emailIsEmpty) return setErrorMessage("Email field is empty.");
+    if(passwordIsEmpty) return setErrorMessage("Password field is empty.");
+
     let response;
     try{
       response = await fetch(`${APIBaseURL}/apiv1/user/login`, {
@@ -25,8 +34,8 @@ export default function Login({APIBaseURL, baseURLForHomeRedirect, URLToRegister
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          email: emailInput.substr(FIRST_CHARACTER, MAX_EMAIL_CHARACTERS).trim(),
-          password: passwordInput.substr(FIRST_CHARACTER, MAX_PASSWORD_CHARACTERS).trim(),
+          email: truncatedEmail,
+          password: truncatedPassword,
         })
       });
     }catch(err){
@@ -43,8 +52,11 @@ export default function Login({APIBaseURL, baseURLForHomeRedirect, URLToRegister
       const objectFromResponse = await response.json();
       if(objectFromResponse.error)
         return setErrorMessage(objectFromResponse.error);
+      if(!objectFromResponse.loginToken) 
+        return setErrorMessage(".loginToken attribute server is empty. Please notify team.");
+        
       setUserSessionToken(objectFromResponse.loginToken);
-      navigate(baseURLForHomeRedirect);
+      navigate(URLToHomePage);
     }catch(err){
       console.log(err);
       if(err instanceof TypeError)
@@ -59,7 +71,10 @@ export default function Login({APIBaseURL, baseURLForHomeRedirect, URLToRegister
   
   return (
     <div className={styles.background}>
-      <div className={styles.loginBox}>
+      <div className={styles.loginBox} onKeyDown={async function (htmlEvent){
+        const pressedEnter = htmlEvent.key === "Enter";
+        if(pressedEnter) login();
+      }}>
         <div className={styles.brandDiv}>
           <img src="/honeycomb.png" className={styles.icon}/>
           <label className={styles.welcomeText}>Welcome to Honeycomb!</label>

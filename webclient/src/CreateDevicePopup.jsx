@@ -1,5 +1,4 @@
 import {useState} from 'react';
-import {userSessionToken} from './globals.jsx'
 import styles from './CreateDevicePopup.module.css'
 
 import {
@@ -8,7 +7,7 @@ import {
 
 import {v4 as uuidv4} from 'uuid';
 
-export function CreateDevicePopup({APIBaseURL, closeSelf}){  
+export function CreateDevicePopup({APIBaseURL, closeSelf, userSessionToken}){  
   const PageID = {
     NAME_AND_SECRETS: 0,
     DATA_STRUCTURE: 1,

@@ -3,7 +3,7 @@ import {
 } from "./utils.js";
 
 import {
-  saltRehashDeviceSecret,
+  saltAndRehash,
   deviceViewingSecretAuthentication,
   secretAuthenticationError,
 } from './auth.js';
@@ -23,8 +23,8 @@ export async function registerDevice(
 ){
   const SALT_SIZE_BYTES = 16;
   const salt = randomBytes(SALT_SIZE_BYTES).toString('hex');
-  const storingDeviceSecret = saltRehashDeviceSecret(deviceSecret, salt);
-  const saltedViewingSecret = saltRehashDeviceSecret(viewingSecret, salt);
+  const storingDeviceSecret = saltAndRehash(deviceSecret, salt);
+  const saltedViewingSecret = saltAndRehash(viewingSecret, salt);
   
   const [insertionResult] = await honeycombDBConnection.execute(
     "INSERT INTO Device (saltedDeviceSecret, saltedViewingSecret, deviceSecretSalt, deviceName, isCompositeDevice, ownerUserID) VALUES (?,?,?,?,?,?)",
