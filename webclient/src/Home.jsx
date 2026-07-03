@@ -88,7 +88,7 @@ function Home({
       {
         showCreateDevicePopup && 
         <CreateDevicePopup 
-          APIBaseURL={APIBaseURL} closeSelf={() => setShowCreateDevicePopup(false)}
+          APIBaseURL={APIBaseURL} closeSelf={() => setShowCreateDevicePopup(false)} userSessionToken={userSessionToken}
         />
       }
       <ErrorPopup text={errorMessage} closeSelf={() => setErrorMessage("")}/>

@@ -20,7 +20,6 @@ export function MainSideNavbar({URLToLoginPage, clearUserSessionToken}){
       setMouseXY({x: htmlEvent.clientX, y: htmlEvent.clientY});
     
     setProfileMenuActive(!profileMenuActive);
-    console.log(htmlEvent);
   }
   
   return (

@@ -189,7 +189,7 @@ apiRouter.post(
         "SELECT salt, saltedPassword, id FROM UserObject WHERE email = ?",
         [truncatedEmail]
       );
-      if(!matchingUser)
+      if(!matchingUser.length)
         return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "No user associated with email"});
       const saltedPassword = saltAndRehash(truncatedPassword, matchingUser[0].salt);
       if(saltedPassword !== matchingUser[0].saltedPassword)
