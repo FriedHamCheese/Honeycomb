@@ -19,40 +19,53 @@ import {
   checkCachedLoginMiddleware,
   checkAuthForDeviceQueryMiddleware,
   checkCachedLoginIsDeviceOwnerMiddleware,
-  MAX_DEVICE_SECRET_CHARACTERS,
-  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
-  MAX_DEVICE_ID_CHARACTERS,
 } from '../auth.js';
+
+import {
+  FIRST_CHARACTER,
+  MAX_DEVICE_SECRET_CHARACTERS,
+  MIN_DEVICE_NAME_CHARACTERS,
+  MAX_DEVICE_NAME_CHARACTERS,
+  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
+  
+  HTTP_STATUS_FOR_OK,
+  HTTP_STATUS_FOR_CREATED,
+  HTTP_STATUS_FOR_BAD_REQUEST,
+  HTTP_STATUS_FOR_UNAUTHORIZED,
+  HTTP_STATUS_FOR_SERVER_ERROR,
+} from '../../constraints.js';
 
 import express from "express";
 export const deviceRouter = express.Router();
-
-const HTTP_STATUS_FOR_CREATED = 201;
-const HTTP_STATUS_FOR_BAD_REQUEST = 400; 
-const HTTP_STATUS_FOR_UNAUTHORIZED = 401;
-const HTTP_STATUS_FOR_SERVER_ERROR = 500;
-
-const INCLUDE_FIRST_CHARACTER = 0;
-const MIN_DEVICE_NAME_CHARACTERS = 1;
-const MAX_DEVICE_NAME_CHARACTERS = 32;
 
 deviceRouter.post(
   "/:deviceID/datapoint", 
   deviceIDParameterValid, 
   deviceSecretAuthenticationMiddleware, 
   async (request, response) => {
+    /*
+    Input:
+    - Authorization: device secret, str[1-32]'
+    - {(attributes: value)}
+    
+    Returns:
+    - HTTP status 201 if datapoint is added
+    - HTTP status 400 with .error:str, if device is a composite device, or device ID from URL is not a positive integer
+    - HTTP status 401 if Authorization is not a string type or not secret of the device
+    - HTTP status 500 for undocumented server errors
+    */
     const objectFromResponse = request.body;
     const tableName = `${request.deviceIDStr}_0`;
     
     try{
       const isCompositeDevice = !(await addDatapoint(objectFromResponse, tableName, sqlConnectionPool, honeycombDBConnectionPool, request.deviceIDInt));
       if(isCompositeDevice)
-        response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({message: `Cannot add datapoint to a composite device.`});
+        response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: `Cannot add datapoint to a composite device.`});
       else
         response.status(HTTP_STATUS_FOR_CREATED).send({message: `Added datapoint to device ${request.deviceIDStr}`});
     }catch(err){
-      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({err: String(err)});
-      throw err;
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
+      console.log(err);
     }    
   }
 );
@@ -62,13 +75,26 @@ deviceRouter.post(
   checkCachedLoginMiddleware,
   async (request, response) => {
     /*
-    input:{
+    Input:
+    - Authorization: user session token, uuid-hex, str[36]
+    - {
       __deviceName: str[1-32],
-      __deviceSecret: str[0-64],
-      __deviceViewingSecret: str[0-64],
+      __deviceSecret: str[0-32],
+      __deviceViewingSecret: str[0-32],
       (attribute: type),
       ...
     }
+    
+    Returns:
+    - HTTP status 201 with {
+      message: str
+      warnings: str
+      deviceID: int
+    } if successful
+      if successful
+    - HTTP status 400 with .error: str if request is invalid
+    - HTTP status 401 if Authorization token is invalid
+    - HTTP status 500 for undocumented server errors
     */
     if((typeof request.body.__deviceSecret) !== "string")
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceSecret not string type."});
@@ -78,16 +104,16 @@ deviceRouter.post(
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceName not string type."});    
     
     const deviceSecretTrimmed = request.body.__deviceSecret
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
       .trim()
     ;
     const deviceViewingSecretTrimmed = request.body.__deviceViewingSecret
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
       .trim()
     ;
   
     const deviceNameTrimmed = request.body.__deviceName
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
       .trim()
     ;
     if(deviceNameTrimmed.length < MIN_DEVICE_NAME_CHARACTERS){
@@ -121,7 +147,7 @@ deviceRouter.post(
       await honeycombDBConnection.rollback();
       honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
       response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
-      throw err;
+      console.log(err);
     }
   }
 );
@@ -131,15 +157,17 @@ deviceRouter.post(
   checkCachedLoginMiddleware,
   async (request, response) => {
     /*
-    input:{
+    input:
+    - Authorization: user session token, uuid-hex, str[36]
+    - {
       __deviceName: str[1-32],
-      __deviceSecret: str[64],
-      __deviceViewingSecret: str[0-64],
+      __deviceSecret: str[0-32],
+      __deviceViewingSecret: str[0-32],
       
       device0ID: int,
-      device0ViewingSecret: str[64],
+      device0ViewingSecret: str[0-32],
       device1ID: int,
-      device1ViewingSecret: str[64],
+      device1ViewingSecret: str[0-32],
       
       device0ConditionField: str[1-32],
       device1ConditionField: str[1-32],
@@ -148,7 +176,16 @@ deviceRouter.post(
         1 = within range
       },
       mergeConditionArgument: null, float
-    }    
+    }
+    
+    Returns:
+    - HTTP status 201 with {
+      message: str
+      deviceID: int
+    } if successful
+    - HTTP status 400 with .error:str, if request is invalid
+    - HTTP status 401 if user session token is invalid
+    - HTTP status 500 for undocumented server errors
     */
     
     if((typeof request.body.__deviceSecret) !== "string")
@@ -159,16 +196,16 @@ deviceRouter.post(
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceName not string type."});    
     
     const deviceSecretTrimmed = request.body.__deviceSecret
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
       .trim()
     ;
     const deviceViewingSecretTrimmed = request.body.__deviceViewingSecret
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
       .trim()
     ;
   
     const deviceNameTrimmed = request.body.__deviceName
-      .substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
+      .substring(FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
       .trim()
     ;
     if(deviceNameTrimmed.length < MIN_DEVICE_NAME_CHARACTERS){
@@ -208,7 +245,7 @@ deviceRouter.post(
       await honeycombDBConnection.rollback();
       honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
       response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
-      throw err;
+      console.log(err);
     }
   }
 );
@@ -244,9 +281,6 @@ deviceRouter.delete(
   deviceIDParameterValid,
   checkCachedLoginIsDeviceOwnerMiddleware, 
   async (request, response) => {
-    const HTTP_STATUS_FOR_OK = 200;    
-    const HTTP_STATUS_FOR_SERVER_ERROR = 500;
-    
     try{
       //exceptions from SQL command execution.
       await deleteDevice(honeycombDBConnectionPool, sqlConnectionPool, request.deviceIDStr, request.deviceIDInt);

@@ -3,13 +3,16 @@ import {honeycombDBConnectionPool} from './sqlConnectionPool.js';
 import {uuidv7} from 'uuidv7';
 import {createHash}  from 'node:crypto'
 
-const INCLUDE_FIRST_CHARACTER = 0;
-export const MAX_DEVICE_ID_CHARACTERS = 16;
-export const MAX_DEVICE_VIEWING_SECRET_CHARACTERS = 64;
-export const MAX_DEVICE_SECRET_CHARACTERS = 64;
-
-const HTTP_STATUS_FOR_BAD_REQUEST = 400; 
-const HTTP_STATUS_FOR_UNAUTHORIZED = 401;
+import {
+  FIRST_CHARACTER,
+  MAX_DEVICE_ID_CHARACTERS,
+  MAX_DEVICE_SECRET_CHARACTERS,
+  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
+  UUID_CHARACTER_COUNT,
+  
+  HTTP_STATUS_FOR_BAD_REQUEST,
+  HTTP_STATUS_FOR_UNAUTHORIZED,
+} from '../constraints.js';
 
 export function saltAndRehash(secret, saltStr){
   const sha512Hash = createHash('sha512');
@@ -17,13 +20,8 @@ export function saltAndRehash(secret, saltStr){
   return sha512Hash.digest('hex');
 }
 
-export function saltRehashDeviceSecret(deviceSecret, saltStr){
-  return saltAndRehash(deviceSecret, saltStr);
-}
-
 export function deviceIDParameterValid(request, response, nextRouter){
-  
-  const deviceIDStr = request.params.deviceID.substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_ID_CHARACTERS).trim();
+  const deviceIDStr = request.params.deviceID.substring(FIRST_CHARACTER, MAX_DEVICE_ID_CHARACTERS).trim();
   const deviceIDInt = Number.parseInt(deviceIDStr);
   if(!deviceIDStr || Number.isNaN(deviceIDInt) || deviceIDInt < 0)
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "deviceID not a positive integer."});  
@@ -39,36 +37,30 @@ export const secretAuthenticationError = {
   SECRET: 2,
 };
 
-export async function deviceViewingSecretAuthentication(deviceID, secret, honeycombDBConnection){
-  const dbConnection = honeycombDBConnection || honeycombDBConnectionPool;
-  
-  const [deviceFromID] = await dbConnection.execute(
+export async function deviceViewingSecretAuthentication(deviceID, secret, honeycombDBConnection){  
+  const [deviceFromID] = await honeycombDBConnection.execute(
     "SELECT saltedViewingSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
   );
-  const invalidDeviceID = deviceFromID.length === 0;
-  if(invalidDeviceID) return secretAuthenticationError.DEVICEID;
+  if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   
   const matchingSaltedViewingSecret = 
-    saltRehashDeviceSecret(secret, deviceFromID[0].deviceSecretSalt) === deviceFromID[0].saltedViewingSecret;
+    saltAndRehash(secret, deviceFromID[0].deviceSecretSalt) === deviceFromID[0].saltedViewingSecret;
   return (matchingSaltedViewingSecret ? secretAuthenticationError.OK : secretAuthenticationError.SECRET);
 }
 
 export async function deviceSecretAndViewingSecretAuthentication(deviceID, secret, viewingSecret, honeycombDBConnection){
-  const dbConnection = honeycombDBConnection || honeycombDBConnectionPool;
-  
-  const [deviceFromID] = await dbConnection.execute(
+  const [deviceFromID] = await honeycombDBConnection.execute(
     "SELECT saltedViewingSecret, saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
   );
-  const invalidDeviceID = deviceFromID.length === 0;
-  if(invalidDeviceID) return secretAuthenticationError.DEVICEID;
+  if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   
   if(secret){
-    const saltedDeviceSecret = saltRehashDeviceSecret(secret, deviceFromID[0].deviceSecretSalt);  
+    const saltedDeviceSecret = saltAndRehash(secret, deviceFromID[0].deviceSecretSalt);  
     const matchingSaltedSecret = saltedDeviceSecret === deviceFromID[0].saltedDeviceSecret;
     if(matchingSaltedSecret) return secretAuthenticationError.OK;
   }
   if(viewingSecret){
-    const saltedViewingSecret = saltRehashDeviceSecret(viewingSecret, deviceFromID[0].deviceSecretSalt);
+    const saltedViewingSecret = saltAndRehash(viewingSecret, deviceFromID[0].deviceSecretSalt);
     const matchingSaltedViewingSecret = saltedViewingSecret === deviceFromID[0].saltedViewingSecret;
     if(matchingSaltedViewingSecret) return secretAuthenticationError.OK;
   }
@@ -77,11 +69,20 @@ export async function deviceSecretAndViewingSecretAuthentication(deviceID, secre
 
 
 export async function deviceSecretAuthenticationMiddleware(request, response, nextRouter){
+  /*
+  Input:
+  - Authorization: device secret, str[1-32]
+  
+  Returns:
+  - HTTP status 401 with .error: str; if Authorization not string type or invalid combination with request.deviceIDInt
+  - Nothing, calls nextRouter()
+  */
+  
   const deviceSecret = request.headers.authorization;
   if((typeof deviceSecret) !== "string")
     return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "authorization header not string type."});
   
-  const trimmedDeviceSecret = deviceSecret.substring(INCLUDE_FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS).trim();
+  const trimmedDeviceSecret = deviceSecret.substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS).trim();
   const [deviceFromID] = await honeycombDBConnectionPool.execute(
     "SELECT saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?",
     [request.deviceIDInt]
@@ -90,7 +91,7 @@ export async function deviceSecretAuthenticationMiddleware(request, response, ne
   const deviceIDNotRegistered = deviceFromID.length < 1;
   if(deviceIDNotRegistered)
     return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "deviceID not registered."});
-  const saltedDeviceSecret = saltRehashDeviceSecret(trimmedDeviceSecret, deviceFromID[0].deviceSecretSalt);
+  const saltedDeviceSecret = saltAndRehash(trimmedDeviceSecret, deviceFromID[0].deviceSecretSalt);
   if(saltedDeviceSecret !== deviceFromID[0].saltedDeviceSecret)
     return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Device secret mismatch."});
   
@@ -99,10 +100,9 @@ export async function deviceSecretAuthenticationMiddleware(request, response, ne
 
 const userLoginCache = [];
 
-const USER_TOKEN_CHARACTERS = 32+4;
 export function getCachedLogin(userToken){
   if(typeof(userToken) !== "string") return undefined;
-  if(userToken.length !== USER_TOKEN_CHARACTERS) return undefined;
+  if(userToken.length !== UUID_CHARACTER_COUNT) return undefined;
   return userLoginCache.find((login) => login.token === userToken);
 }
 
@@ -113,10 +113,18 @@ export function saveToLoginCache(email, userID){
 }
 
 export function checkCachedLoginMiddleware(request, response, nextRoute){
+  /*
+  Input: 
+  - Authorization: user session token, uuidv7-hex, str[36]
+  
+  Returns:
+  - HTTP status 401 with .error: str; if session token not string type or not in cached logins.
+  - Nothing, adds request.cachedLogin, calls nextRoute()
+  */
   const userLoginToken = request.get('Authorization');
   const cachedLogin = getCachedLogin(userLoginToken);
   if(!cachedLogin) 
-    return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({message: "Invalid user login token."});
+    return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Invalid user login token."});
   request.cachedLogin = cachedLogin;
   nextRoute();
 }

@@ -8,6 +8,9 @@ import {Helmet} from 'react-helmet';
   - loading states
   - websocket or webhook for device previews and datapoints
   - get user details during login
+  - lazy loading
+  - icon
+  - check sql injections
 */
 
 createRoot(document.getElementById('root')).render(
