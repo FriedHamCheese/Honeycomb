@@ -67,6 +67,22 @@ export async function deviceSecretAndViewingSecretAuthentication(deviceID, secre
   return secretAuthenticationError.SECRET;
 }
 
+export async function deviceSecretAuthentication(deviceSecret, deviceID){
+  const trimmedDeviceSecret = deviceSecret.substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS).trim();
+  const [deviceFromID] = await honeycombDBConnectionPool.execute(
+    "SELECT saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?",
+    [deviceID]
+  );
+  
+  const deviceIDNotRegistered = deviceFromID.length < 1;
+  if(deviceIDNotRegistered)
+    return secretAuthenticationError.DEVICEID;
+  const saltedDeviceSecret = saltAndRehash(trimmedDeviceSecret, deviceFromID[0].deviceSecretSalt);
+  if(saltedDeviceSecret !== deviceFromID[0].saltedDeviceSecret)
+    return secretAuthenticationError.SECRET;
+  
+  return secretAuthenticationError.OK;
+}
 
 export async function deviceSecretAuthenticationMiddleware(request, response, nextRouter){
   /*

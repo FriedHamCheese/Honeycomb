@@ -3,6 +3,13 @@ import {
 } from './apiv1/device.js';
 
 import {
+  webSocketRouterToMCU,
+  toMCUOnMessage,
+  toMCUOnClose,
+  toMCUOnError,
+} from './apiv1/webSockets.js';
+
+import {
   sqlConnectionPool,
   honeycombDBConnectionPool,
 } from './sqlConnectionPool.js'
@@ -33,6 +40,7 @@ import {
   HTTP_STATUS_FOR_SERVER_ERROR,
 } from '../constraints.js';
 
+import http from 'node:http';
 import {randomBytes} from 'node:crypto';
 
 import express from "express";
@@ -207,7 +215,13 @@ apiRouter.post(
 
 apiRouter.use("/device", deviceRouter);
 app.use("/apiv1", apiRouter);
-app.listen(PORT_NUMBER, async () => {
+
+const httpServer = http.createServer(app);
+
+webSocketRouterToMCU.createSocket(httpServer, '/toDevice');
+webSocketRouterToMCU.begin({onMessage: toMCUOnMessage, onClose: toMCUOnClose, onError: toMCUOnError});
+
+httpServer.listen(PORT_NUMBER, async () => {
   await honeycombDBConnectionPool.execute("SELECT MAX(deviceID) FROM Device");
   console.log(`Honeycomb server running on port ${PORT_NUMBER}.`)
 })
