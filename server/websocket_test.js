@@ -32,7 +32,7 @@ function testWebSocketRouterToMCU(){
 
     try{
       socket.addEventListener('open', function (){
-        socket.send(JSON.stringify({deviceID: 6, deviceSecret: "cookies"}));
+        socket.send(JSON.stringify({__messageType: "auth", deviceID: 6, deviceSecret: "cookies"}));
       });
       socket.addEventListener('error', function (errorEvent){
         clearTimeout(timerID);

@@ -35,6 +35,8 @@ import {
   HTTP_STATUS_FOR_SERVER_ERROR,
 } from '../../constraints.js';
 
+import {webSocketRouterToMCU} from './webSockets.js';
+
 import express from "express";
 export const deviceRouter = express.Router();
 
@@ -266,6 +268,11 @@ deviceRouter.get(
       ]);
       
       const QUERY_RESULT = 0;
+      webSocketRouterToMCU.putToDevice(JSON.stringify({
+          __messageType: "patch", temperature_celsius: 25.0, relative_humidity_percent: 75.0
+        }), 
+        request.deviceIDInt
+      );
       response.send({
         deviceName: deviceNameResult[QUERY_RESULT][0].deviceName,
         table: tableResult[QUERY_RESULT],
