@@ -2,7 +2,7 @@
 #include "Honeycomb.hpp"
 #include <ESP8266WiFi.h>
 
-HoneycombClient honeycombClient("192.168.1.34", 5001, 1024);
+HoneycombClient honeycombClient("192.168.1.34", 5001, 1024, 15000);
 Optional<bool, JsonDocument> variableUpdateFromServer;
 
 void setup() {
@@ -11,17 +11,6 @@ void setup() {
   
   WiFi.begin(secrets::wifiSsid, secrets::wifiPassword);
   honeycombClient.variablesFromServer = &variableUpdateFromServer;
-
-  while(true){
-    constexpr unsigned long retryMs = 500;
-
-    const int honeycombInitError = honeycombClient.begin();
-    if(!honeycombInitError) break;
-    Serial.println("Fatal error: error initialising honeycomb websocket instance. Retrying...");
-    Serial.println(honeycombInitError);
-    delay(retryMs);
-  }   
-  honeycombClient.authenticate(6, "cookies");
 }
 
 void loop() {
@@ -55,11 +44,31 @@ void loop() {
         Serial.println("WiFi");
     }
   }
-  
+
+
+  if(not honeycombClient.isConnected()){
+    const int honeycombInitError = honeycombClient.begin();
+    if(honeycombInitError){
+      Serial.print("Error: error initialising honeycomb websocket instance (HoneycombError ");
+      Serial.print(honeycombInitError);
+      Serial.println(')');
+      return;
+    }
+  }
+  if(not honeycombClient.isAuthenticated()){
+    const HoneycombError authError = honeycombClient.authenticate(6, "cookies");
+    if(authError != HoneycombError::ok){
+      Serial.print("Error: error authenticating honeycomb websocket instance (HoneycombError ");
+      Serial.print((uint16_t)authError);
+      Serial.println(')');
+      return;
+    }
+  }
+
+  honeycombClient.pingServer();
   const HoneycombError honeycombReadError = honeycombClient.readIncomingMessages();
   if(honeycombReadError == HoneycombError::authenticate){
-    Serial.println("Auth error.");
-    honeycombClient.authenticate(6, "cookies");
+    Serial.println("Error: Authentication rejected from server.");
     return;
   }
   if(honeycombReadError != HoneycombError::ok){
@@ -69,7 +78,6 @@ void loop() {
     return;
   }
   
-  Serial.println(variableUpdateFromServer.errorCode);
   if(!variableUpdateFromServer.errorCode) return;
   variableUpdateFromServer.errorCode = false;
   

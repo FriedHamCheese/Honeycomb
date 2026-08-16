@@ -218,8 +218,10 @@ app.use("/apiv1", apiRouter);
 
 const httpServer = http.createServer(app);
 
-webSocketRouterToMCU.createSocket(httpServer, '/toDevice');
-webSocketRouterToMCU.begin({onMessage: toMCUOnMessage, onClose: toMCUOnClose, onError: toMCUOnError});
+webSocketRouterToMCU.createSocket(httpServer, '/toDevice', 15000, 5);
+webSocketRouterToMCU.begin({
+  onMessage: toMCUOnMessage, onClose: toMCUOnClose, onError: toMCUOnError
+});
 
 httpServer.listen(PORT_NUMBER, async () => {
   await honeycombDBConnectionPool.execute("SELECT MAX(deviceID) FROM Device");

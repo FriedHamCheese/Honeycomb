@@ -18,11 +18,14 @@ export class WebSocketRouterToMCU{
   #connections;
   
   constructor(){
+    //optimise to allocate until certain size, delete by setting as null
     this.#connections = []
   }
   
-  createSocket(httpServer, relativePath){
+  createSocket(httpServer, relativePath, minConnectionStaleMs, maxAuthenticatedConnections){
     this.#webSocketServer = new WebSocketServer({server: httpServer, path: relativePath});
+    this.minConnectionStaleMs = minConnectionStaleMs;
+    this.maxAuthenticatedConnections = maxAuthenticatedConnections;
   }
  
   begin({onMessage, onClose, onError, maxRequestBodyBytes}){
@@ -35,6 +38,7 @@ export class WebSocketRouterToMCU{
           addConnection: this.addConnection.bind(this), 
           clientWebSocket: clientWebSocket,
           maxRequestBodyBytes: maxRequestBodyBytes || 1024,
+          removeStaleConnections: this.removeStaleConnections.bind(this),
         });
       });
       clientWebSocket.on("close", () => {onClose(this.removeConnection.bind(this), clientWebSocket)});
@@ -43,35 +47,62 @@ export class WebSocketRouterToMCU{
   }
  
   addConnection(connection){
-    const deviceAlreadyConnected = this.#connections.find((element) => {return element.deviceID === connection.deviceID;});
-    if(deviceAlreadyConnected) return false;
+    const indexOfDeviceWithID = this.#connections.findIndex(function (element){
+      if(!element) return false;
+      return element.deviceID === connection.deviceID;
+    });
+    if(indexOfDeviceWithID !== -1) return false;
     
-    this.#connections.push(connection);
+    if(this.#connections.length < this.maxAuthenticatedConnections){
+      this.#connections.push(connection); 
+      return true;
+    }
+    const emptyConnectionSlot = this.#connections.findIndex(function (element){return element === null});
+    if(emptyConnectionSlot !== -1) return false;    
+    this.#connections[emptyConnectionSlot] = connection;
     return true;
   }
   removeConnection(clientWebSocket){
     const indexOfConnection = this.#connections.findIndex((element) => {
+      if(!element) return false;
       return element.getClientWebSocket() === clientWebSocket;
     });
     if(indexOfConnection === -1) return false;
     
     const REMOVE_ELEMENT_AT_INDEX = 1;
-    this.#connections.splice(indexOfConnection, REMOVE_ELEMENT_AT_INDEX);
+    this.#connections[indexOfConnection].getClientWebSocket().close();
+    this.#connections[indexOfConnection] = null;
     return true;
   }
   getConnection(clientWebSocket){
     return this.#connections.find((element) => {return element.getClientWebSocket() === clientWebSocket;});
+  }  
+  removeStaleConnections(){
+    const currentMsSinceEpoch = Date.now();
+    while(this.#connections.length !== 0){      
+      const staleConnectionIndex = this.#connections.findIndex(
+        (element) => {
+          if(!element) return false;
+          return (currentMsSinceEpoch - element.lastResponseTime) >= this.minConnectionStaleMs;
+        }
+      );
+      const DELETE_AT_INDEX = 1;
+      if(staleConnectionIndex === -1)
+        break;
+      this.#connections[staleConnectionIndex].getClientWebSocket().close();
+      this.#connections[staleConnectionIndex] = null;
+    }
   }
   
   putToDevice(stringifiedObject, deviceID){
     const connection = this.#connections.find((element) => {return element.getDeviceID() === deviceID;});
-    console.log(connection);
     if(!connection) return;
     connection.getClientWebSocket().send(stringifiedObject);
   }
 };
 
 export const webSocketRouterToMCU = new WebSocketRouterToMCU();
+
 
 class ConnectionToMCU{
   #clientWebSocket;
@@ -81,6 +112,7 @@ class ConnectionToMCU{
     this.#clientWebSocket = clientWebSocket;
     this.#deviceID = deviceID;
     this.authenticated = authenticated;
+    this.lastResponseTime = Date.now();
   }
   
   getDeviceID(){
@@ -93,93 +125,131 @@ class ConnectionToMCU{
 
 
 export async function toMCUOnMessage(
-{data, isBinaryData, getConnection, addConnection, clientWebSocket, maxRequestBodyBytes}
-){
-  console.log("message received");
+  {data, isBinaryData, getConnection, addConnection, clientWebSocket, maxRequestBodyBytes, removeStaleConnections}
+){  
+  /*
+  Dispatches message handling to appropriate types and conditions.
+  The device must first authenticate, 
+  then send (ping) any message to the server every 60 seconds to not consider the connection as stale and to be removed.
+  If no valid message is available for pinging, 
+  use {__messageType: "ping"} to not cause JSON parse errors or message type errors.
   
+  The message format uses JSON in the format of:{
+    __messageType: string,
+    (...type-specific attributes)
+  } which could be:
+    - {
+      __messageType: "auth",
+      deviceID: int,
+      deviceSecret: str[0-MAX_DEVICE_SECRET_CHARACTERS]
+    } for marking a connection as authenticated
+    - {
+      __messageType: "ping"
+    } to not mark the connection as stale for removal
+  
+  Returns:
+  - {__messageType: "error", error: string} for type-generic errors when:
+    - received message is detected as binary instead of text
+    - length of message exceeds server-set amount of bytes
+    - couldn't parse message as JSON. Note: make sure C null terminator is not in the message.
+  - {__messageType: "auth", success: true|false}
+    - .success is true if no other connection occupies the same device ID
+  - {__messageType: "auth", error: str}: invalid attribute for auth type message.
+  - {__messageType: "pingerr"}: the device is not authenticated
+  */
   const connection = getConnection(clientWebSocket);
+  if(connection) connection.lastResponseTime = Date.now();
   
-  if(connection)
-    if(connection.authenticated) return;
-  if(isBinaryData) return clientWebSocket.send({
-    __messageType: "error",
-    error: "only text data is accepted."
-  });
-  
-  let textFromData;
-  if(!(data instanceof Buffer)){
-    return clientWebSocket.send(JSON.stringify({
-      __messageType: "error",
-      error: `Unsupported data container ${typeof data}, sorry!`
-    }));
-  }
-
-  if(data.length > maxRequestBodyBytes)
-    return clientWebSocket.send(JSON.stringify({
-      __messageType: "error",
-      error: `Body of request exceeded ${maxRequestBodyBytes} bytes.`
-    }));
-  textFromData = data.toString('utf8');
-  
-  let objectFromRequest;
   try{
-    objectFromRequest = JSON.parse(textFromData);
-  }catch(err){
-    if(err instanceof SyntaxError)
+    if(isBinaryData)
+      return clientWebSocket.send({__messageType: "error", error: "only text data is accepted."});
+    if(!(data instanceof Buffer)){
       return clientWebSocket.send(JSON.stringify({
-        __messageType: "error",
-        error: "Could not parse sent JSON."
+        __messageType: "error", error: `Unsupported data container ${typeof data}, sorry!`
       }));
-    clientWebSocket.send(JSON.stringify({
-      __messageType: "error",
-      error: String(err)
+    }
+    if(data.length > maxRequestBodyBytes){
+      return clientWebSocket.send(JSON.stringify({
+        __messageType: "error", error: `Body of request exceeded ${maxRequestBodyBytes} bytes.`
+      }));
+    }
+    
+    const textFromData = data.toString('utf8');
+    let objectFromRequest;
+    try{
+      objectFromRequest = JSON.parse(textFromData);
+    }catch(err){
+      if(err instanceof SyntaxError)
+        return clientWebSocket.send(JSON.stringify({
+          __messageType: "error", error: "Could not parse sent JSON."
+        }));
+      clientWebSocket.send(JSON.stringify({
+        __messageType: "error", error: String(err)
+      }));
+      console.log("WebSocket server to MCU: toMCUOnMessage:");
+      console.log(err);
+      return;
+    }
+    const noHaveMessageType = (typeof objectFromRequest.__messageType) !== "string";
+    if(noHaveMessageType) return clientWebSocket.send(JSON.stringify({
+      __messageType: "error", error: "Message does not have .__messageType as string."
     }));
-    return console.log(err);
+    
+    switch(objectFromRequest.__messageType){
+      case("auth"):{
+        await handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleConnections, addConnection);
+        break;
+      }
+      case("ping"): break;
+      default:
+      clientWebSocket.send(JSON.stringify({
+        __messageType: "error", error: `Unrecognised __messageType ${objectFromRequest.__messageType}`
+      }));
+    }
+  }catch(err){
+    console.log("WebSocket server to MCU: toMCUOnMessage:");
+    console.log(String(err));
   }
-  
-  console.log(objectFromRequest);
-  const noHaveMessageType = (typeof objectFromRequest.__messageType) !== "string";
-  if(noHaveMessageType) return clientWebSocket.send(JSON.stringify({
-    __messageType: "error",
-    error: "Message does not have .__messageType as string."
-  }));
-  
-  const isAuthMessageType = (objectFromRequest.__messageType === "auth")
-                            && ((typeof objectFromRequest.deviceSecret) === "string") 
-                            && ((typeof objectFromRequest.deviceID) === "number");
-  if(!isAuthMessageType)
-    return
+};
 
+export function toMCUOnClose(removeConnection, clientWebSocket){
+  removeConnection(clientWebSocket);
+}
+
+export function toMCUOnError(error){
+  console.log("WebSocket server to MCU: toMCUOnError:");
+  console.log(String(error));
+}
+
+async function handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleConnections, addConnection){
+  if((typeof objectFromRequest.deviceSecret) !== "string")
+    return clientWebSocket.send(JSON.stringify({
+      __messageType: "auth", error: ".deviceSecret must be an string."
+    })); 
+
+  if(connection)
+    if(connection.authenticated) return clientWebSocket.send(JSON.stringify({
+      __messageType: "auth", success: true
+    }));
+  
   if(!Number.isInteger(objectFromRequest.deviceID))
     return clientWebSocket.send(JSON.stringify({
-      __messageType: "auth",
-      error: ".deviceID must be an integer."
+      __messageType: "auth", error: ".deviceID must be an integer."
     }));
   
   const authenticationError = await deviceSecretAuthentication(objectFromRequest.deviceSecret, objectFromRequest.deviceID);
   if(authenticationError === secretAuthenticationError.DEVICEID)
     return clientWebSocket.send(JSON.stringify({
-      __messageType: "auth",
-      error: "Invalid device ID."
+      __messageType: "auth", error: "Invalid device ID."
     })); 
   if(authenticationError === secretAuthenticationError.SECRET)
     return clientWebSocket.send(JSON.stringify({
-      __messageType: "auth",
-      error: "Invalid device secret in .deviceSecret."
+      __messageType: "auth", error: "Invalid device secret in .deviceSecret."
     }));
-  
-  addConnection(new ConnectionToMCU(clientWebSocket, objectFromRequest.deviceID, true));
+    
+  removeStaleConnections();
+  const acceptedAuth = addConnection(new ConnectionToMCU(clientWebSocket, objectFromRequest.deviceID, true));
   return clientWebSocket.send(JSON.stringify({
-    __messageType: "auth",
-    success: true
-  }));
-};
-
-export function toMCUOnClose(removeConnection, clientWebSocket){
-  console.log("removing connection");
-  removeConnection(clientWebSocket);  
-}
-
-export function toMCUOnError(error){
-  console.log(String(error));
+    __messageType: "auth", success: acceptedAuth
+  }));   
 }

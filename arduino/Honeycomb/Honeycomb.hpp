@@ -53,7 +53,8 @@ enum class HoneycombError : uint8_t{
   unclearType,
   noHandler,
   authenticate,
-  
+  connectionStale, 
+ 
   emptyInput,
   incompleteInput,
   invalidInput,
@@ -68,10 +69,11 @@ enum class HoneycombError : uint8_t{
 
 class HoneycombClient{
   public:
-  HoneycombClient(const char* serverURL, uint16_t serverPort, uint16_t maxIncomingBytes);
+  HoneycombClient(const char* serverURL, uint16_t serverPort, uint16_t maxIncomingBytes, unsigned long maxMsBeforeTimeout);
   //so what happens if mcu lost wifi?
   int begin();
   HoneycombError authenticate(uint64_t deviceID, const char* deviceSecret);
+  HoneycombError pingServer();
   HoneycombError readIncomingMessages();
 
   Optional<bool, JsonDocument>* variablesFromServer;
@@ -82,7 +84,21 @@ class HoneycombClient{
   char scratchpadBuffer[scratchpadBufferBytes];
   WiFiClient wifiClient;
   WebSocketClient webSocketConnection;
+  
+  unsigned long millisLastServerMessage;
+  unsigned long maxMsBeforeTimeout;
   uint16_t maxIncomingBytes;
+  
+  bool connected;
+  bool authenticated;
+  
+  public:
+  inline bool isConnected() const{
+    return this->connected;
+  }
+  inline bool isAuthenticated() const{
+    return this->authenticated;
+  }
 };
 
 HoneycombError deserializationErrorToHoneycombError(const DeserializationError error);
