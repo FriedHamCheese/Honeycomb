@@ -1,131 +1,172 @@
-import {HTTP_STATUS_FOR_BAD_REQUEST} from '../../constraints.js';
+import {
+  HTTP_STATUS_FOR_BAD_REQUEST, 
+  WEBSOCKET_MAX_AUTHENTICATED_CONNECTIONS, 
+  MAX_DEVICE_SECRET_CHARACTERS,
+  MAX_WEBSOCKET_TO_SERVER_BYTES,
+  WEBSOCKET_MS_BEFORE_STALE,
+  } from '../../constraints.js';
 import {
   deviceSecretAuthentication, secretAuthenticationError
 } from '../auth.js';
 
 import {WebSocketServer} from 'ws';
 
-/*
-Websockets for:
-- server to mcu
-- optional: server to dashboard
-- optional: dashboard to server
-- optional: mcu to server
-*/
-
 export class WebSocketRouterToMCU{
   #webSocketServer;
-  #connections;
+  #authenticatedConnections;
   
   constructor(){
-    //optimise to allocate until certain size, delete by setting as null
-    this.#connections = []
+    //array[AuthenticatedMCUConnection | null];
+    this.#authenticatedConnections = []
   }
   
-  createSocket(httpServer, relativePath, minConnectionStaleMs, maxAuthenticatedConnections){
+  createSocket(httpServer, relativePath){
+    //May throw undocumented exceptions
     this.#webSocketServer = new WebSocketServer({server: httpServer, path: relativePath});
-    this.minConnectionStaleMs = minConnectionStaleMs;
-    this.maxAuthenticatedConnections = maxAuthenticatedConnections;
   }
  
-  begin({onMessage, onClose, onError, maxRequestBodyBytes}){
+  begin(){
     this.#webSocketServer.on('connection', function (clientWebSocket, httpRequest){
       clientWebSocket.on("message", (data, isBinary) => {
-        onMessage({
+        toMCUOnMessage({
           data: data, 
           isBinaryData: isBinary, 
-          getConnection: this.getConnection.bind(this), 
-          addConnection: this.addConnection.bind(this), 
+          getAuthenticatedConnection: this.getAuthenticatedConnection.bind(this), 
+          addAuthenticatedConnection: this.addAuthenticatedConnection.bind(this), 
           clientWebSocket: clientWebSocket,
-          maxRequestBodyBytes: maxRequestBodyBytes || 1024,
-          removeStaleConnections: this.removeStaleConnections.bind(this),
+          removeStaleAuthenticatedConnections: this.removeStaleAuthenticatedConnections.bind(this),
         });
       });
-      clientWebSocket.on("close", () => {onClose(this.removeConnection.bind(this), clientWebSocket)});
-      clientWebSocket.on("error", onError);
+      clientWebSocket.on("close", () => {toMCUOnClose(this.removeAuthenticatedSocket.bind(this), clientWebSocket)});
+      clientWebSocket.on("error", toMCUOnError);
     }.bind(this));
   }
  
-  addConnection(connection){
-    const indexOfDeviceWithID = this.#connections.findIndex(function (element){
+  addAuthenticatedConnection(connection){
+    /*
+      Adds an AuthenticatedMCUConnection to this.#authenticatedConnections.
+      Does not raise exceptions.
+      
+      Returns:
+      - true, if connection is able to be added.
+      - false, if there is a live connection with the same device ID, or the container of live connections is full.
+    */
+    const indexOfDeviceWithID = this.#authenticatedConnections.findIndex(function (element){
       if(!element) return false;
       return element.deviceID === connection.deviceID;
     });
-    if(indexOfDeviceWithID !== -1) return false;
+    const deviceIDClaimedByAnotherConnection = indexOfDeviceWithID !== -1;
+    if(deviceIDClaimedByAnotherConnection) return false;
     
-    if(this.#connections.length < this.maxAuthenticatedConnections){
-      this.#connections.push(connection); 
+    if(this.#authenticatedConnections.length < WEBSOCKET_MAX_AUTHENTICATED_CONNECTIONS){
+      this.#authenticatedConnections.push(connection); 
       return true;
     }
-    const emptyConnectionSlot = this.#connections.findIndex(function (element){return element === null});
-    if(emptyConnectionSlot !== -1) return false;    
-    this.#connections[emptyConnectionSlot] = connection;
+    const emptyConnectionSlot = this.#authenticatedConnections.findIndex(function (element){return element === null});
+    const noEmptyConnectionSlot = emptyConnectionSlot === -1;
+    if(noEmptyConnectionSlot) return false;    
+    this.#authenticatedConnections[emptyConnectionSlot] = connection;
     return true;
   }
-  removeConnection(clientWebSocket){
-    const indexOfConnection = this.#connections.findIndex((element) => {
+  removeAuthenticatedSocket(clientWebSocket){
+    /*
+      Removes an AuthenticatedMCUConnection containing the socket from this.#authenticatedConnections.
+      May raise undocumented exceptions.
+      
+      Returns:
+      - true, if the socket corresponds to an AuthenticatedMCUConnection, the socket is closed 
+        and the AuthenticatedMCUConnection removed.
+      - false, if the socket doesn't
+    */
+    const indexOfConnection = this.#authenticatedConnections.findIndex((element) => {
       if(!element) return false;
       return element.getClientWebSocket() === clientWebSocket;
     });
-    if(indexOfConnection === -1) return false;
+    const socketNotAuthenticated = indexOfConnection === -1;
+    if(socketNotAuthenticated) return false;
     
-    const REMOVE_ELEMENT_AT_INDEX = 1;
-    this.#connections[indexOfConnection].getClientWebSocket().close();
-    this.#connections[indexOfConnection] = null;
+    this.#authenticatedConnections[indexOfConnection].getClientWebSocket().close();
+    this.#authenticatedConnections[indexOfConnection] = null;
     return true;
   }
-  getConnection(clientWebSocket){
-    return this.#connections.find((element) => {return element.getClientWebSocket() === clientWebSocket;});
+  getAuthenticatedConnection(clientWebSocket){
+    /*
+      Returns an AuthenticatedMCUConnection corresponding to the socket.
+      Does not raise exceptions.
+      Returns: AuthenticatedMCUConnection, null if not found.
+    */
+    return this.#authenticatedConnections.find((element) => {
+      if(!element) return false;
+      return element.getClientWebSocket() === clientWebSocket;
+    });
   }  
-  removeStaleConnections(){
+  removeStaleAuthenticatedConnections(){
+    /*
+      Iterates through this.#authenticatedConnections 
+      and removes any AuthenticatedMCUConnection which hasn't pinged the server within WEBSOCKET_MS_BEFORE_STALE,
+      closing the socket connection before removing.
+      
+      May raise undocumented exceptions.
+      Returns nothing.
+    */
     const currentMsSinceEpoch = Date.now();
-    while(this.#connections.length !== 0){      
-      const staleConnectionIndex = this.#connections.findIndex(
+    while(this.#authenticatedConnections.length !== 0){      
+      const staleConnectionIndex = this.#authenticatedConnections.findIndex(
         (element) => {
           if(!element) return false;
-          return (currentMsSinceEpoch - element.lastResponseTime) >= this.minConnectionStaleMs;
+          return (currentMsSinceEpoch - element.lastResponseEpochMs) >= WEBSOCKET_MS_BEFORE_STALE;
         }
       );
-      const DELETE_AT_INDEX = 1;
-      if(staleConnectionIndex === -1)
-        break;
-      this.#connections[staleConnectionIndex].getClientWebSocket().close();
-      this.#connections[staleConnectionIndex] = null;
+      const noStaleConnections = staleConnectionIndex === -1;
+      if(noStaleConnections) break;
+      this.#authenticatedConnections[staleConnectionIndex].getClientWebSocket().close();
+      this.#authenticatedConnections[staleConnectionIndex] = null;
     }
   }
-  
+
   putToDevice(stringifiedObject, deviceID){
-    const connection = this.#connections.find((element) => {return element.getDeviceID() === deviceID;});
-    if(!connection) return;
+    /*
+    Finds the AuthenticatedMCUConnection corresponding to deviceID and sends stringifiedObject.
+    stringifiedObject must be a stringified JSON.
+    
+    May raise undocumented exceptions.
+    Returns true if the connection is found and the string is sent, false if not found.
+    */
+    const connection = this.#authenticatedConnections.find((element) => {return element.getDeviceID() === deviceID;});
+    if(!connection) return false;
     connection.getClientWebSocket().send(stringifiedObject);
+    return true;
   }
 };
 
 export const webSocketRouterToMCU = new WebSocketRouterToMCU();
 
 
-class ConnectionToMCU{
+class AuthenticatedMCUConnection{
   #clientWebSocket;
   #deviceID;
   
   constructor(clientWebSocket, deviceID, authenticated){
+    //Does not raise exceptions.
     this.#clientWebSocket = clientWebSocket;
     this.#deviceID = deviceID;
     this.authenticated = authenticated;
-    this.lastResponseTime = Date.now();
+    this.lastResponseEpochMs = Date.now();
   }
   
   getDeviceID(){
+    //Does not raise exceptions.
     return this.#deviceID;
   }
   getClientWebSocket(){
+    //Does not raise exceptions.
     return this.#clientWebSocket;
   }
 };
 
 
 export async function toMCUOnMessage(
-  {data, isBinaryData, getConnection, addConnection, clientWebSocket, maxRequestBodyBytes, removeStaleConnections}
+  {data, isBinaryData, getAuthenticatedConnection, addAuthenticatedConnection, clientWebSocket, maxRequestBodyBytes, removeStaleAuthenticatedConnections}
 ){  
   /*
   Dispatches message handling to appropriate types and conditions.
@@ -137,40 +178,34 @@ export async function toMCUOnMessage(
   The message format uses JSON in the format of:{
     __messageType: string,
     (...type-specific attributes)
-  } which could be:
-    - {
-      __messageType: "auth",
-      deviceID: int,
-      deviceSecret: str[0-MAX_DEVICE_SECRET_CHARACTERS]
-    } for marking a connection as authenticated
-    - {
-      __messageType: "ping"
-    } to not mark the connection as stale for removal
+  }
+  See handleAuthMessage for __messageType: "auth" input and response.
   
   Returns:
   - {__messageType: "error", error: string} for type-generic errors when:
     - received message is detected as binary instead of text
     - length of message exceeds server-set amount of bytes
     - couldn't parse message as JSON. Note: make sure C null terminator is not in the message.
-  - {__messageType: "auth", success: true|false}
-    - .success is true if no other connection occupies the same device ID
-  - {__messageType: "auth", error: str}: invalid attribute for auth type message.
+    - npm ws gives its data as other type than Buffer
+  - {__messageType: "auth", ...} see handleAuthMessage.
   - {__messageType: "pingerr"}: the device is not authenticated
+  
+  Does not raise exceptions, outputs to clientWebSocket and console.
   */
-  const connection = getConnection(clientWebSocket);
-  if(connection) connection.lastResponseTime = Date.now();
+  const connection = getAuthenticatedConnection(clientWebSocket);
+  if(connection) connection.lastResponseEpochMs = Date.now();
   
   try{
     if(isBinaryData)
-      return clientWebSocket.send({__messageType: "error", error: "only text data is accepted."});
+      return clientWebSocket.send(JSON.stringify({__messageType: "error", error: "only text data is accepted."}));
     if(!(data instanceof Buffer)){
       return clientWebSocket.send(JSON.stringify({
         __messageType: "error", error: `Unsupported data container ${typeof data}, sorry!`
       }));
     }
-    if(data.length > maxRequestBodyBytes){
+    if(data.length > MAX_WEBSOCKET_TO_SERVER_BYTES){
       return clientWebSocket.send(JSON.stringify({
-        __messageType: "error", error: `Body of request exceeded ${maxRequestBodyBytes} bytes.`
+        __messageType: "error", error: `Body of request exceeded ${MAX_WEBSOCKET_TO_SERVER_BYTES} bytes.`
       }));
     }
     
@@ -197,7 +232,7 @@ export async function toMCUOnMessage(
     
     switch(objectFromRequest.__messageType){
       case("auth"):{
-        await handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleConnections, addConnection);
+        await handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleAuthenticatedConnections, addAuthenticatedConnection);
         break;
       }
       case("ping"): break;
@@ -212,8 +247,13 @@ export async function toMCUOnMessage(
   }
 };
 
-export function toMCUOnClose(removeConnection, clientWebSocket){
-  removeConnection(clientWebSocket);
+export function toMCUOnClose(removeAuthenticatedSocket, clientWebSocket){
+  try{
+    removeAuthenticatedSocket(clientWebSocket);
+  }catch(err){
+    console.log("WebSocket server to MCU: toMCUOnClose:");
+    console.log(String(err));    
+  }
 }
 
 export function toMCUOnError(error){
@@ -221,7 +261,26 @@ export function toMCUOnError(error){
   console.log(String(error));
 }
 
-async function handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleConnections, addConnection){
+async function handleAuthMessage(
+  objectFromRequest, connection, clientWebSocket, removeStaleAuthenticatedConnections, addAuthenticatedConnection
+){
+  /*
+    Handles messages with __messageType: "auth".
+    May raise undocumented exceptions.
+    
+    Input:{
+      __messageType: "auth",
+      deviceID: int,
+      deviceSecret: str[0-MAX_DEVICE_SECRET_CHARACTERS]
+    }
+    
+    Writes to connection with:
+    - {__messageType: "auth", success: true|false}
+      - .success is true if no other connection occupies the same device ID
+    - {__messageType: "auth", error: str}: invalid attribute for auth type message.
+    
+    Returns nothing.
+  */
   if((typeof objectFromRequest.deviceSecret) !== "string")
     return clientWebSocket.send(JSON.stringify({
       __messageType: "auth", error: ".deviceSecret must be an string."
@@ -247,8 +306,8 @@ async function handleAuthMessage(objectFromRequest, connection, clientWebSocket,
       __messageType: "auth", error: "Invalid device secret in .deviceSecret."
     }));
     
-  removeStaleConnections();
-  const acceptedAuth = addConnection(new ConnectionToMCU(clientWebSocket, objectFromRequest.deviceID, true));
+  removeStaleAuthenticatedConnections();
+  const acceptedAuth = addAuthenticatedConnection(new AuthenticatedMCUConnection(clientWebSocket, objectFromRequest.deviceID, true));
   return clientWebSocket.send(JSON.stringify({
     __messageType: "auth", success: acceptedAuth
   }));   

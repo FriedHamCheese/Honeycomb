@@ -182,7 +182,10 @@ apiRouter.post(
     const userToken = request.get('Authorization');
     if(getCachedLogin(userToken)) 
       return response.status(HTTP_STATUS_FOR_OK).send({loginToken: userToken});  
-  
+    
+    if((typeof request.body) !== "object")
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Request is required to be a JSON object."});  
+
     const {email, password} = request.body;
     if((typeof email) !== "string")
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: ".email attribute not string type"});
@@ -212,16 +215,15 @@ apiRouter.post(
   }
 );
 
+//Add backslash-proof password handling
 
 apiRouter.use("/device", deviceRouter);
 app.use("/apiv1", apiRouter);
 
 const httpServer = http.createServer(app);
 
-webSocketRouterToMCU.createSocket(httpServer, '/toDevice', 15000, 5);
-webSocketRouterToMCU.begin({
-  onMessage: toMCUOnMessage, onClose: toMCUOnClose, onError: toMCUOnError
-});
+webSocketRouterToMCU.createSocket(httpServer, '/toDevice');
+webSocketRouterToMCU.begin();
 
 httpServer.listen(PORT_NUMBER, async () => {
   await honeycombDBConnectionPool.execute("SELECT MAX(deviceID) FROM Device");
