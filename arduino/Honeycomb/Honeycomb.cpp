@@ -18,17 +18,20 @@ HoneycombClient::HoneycombClient(
 int HoneycombClient::begin(){
   this->authenticated = false;
   const int connectionBeginError = this->webSocketConnection.begin("/toDevice");
-  if(!connectionBeginError) this->connected = true;
+  if(!connectionBeginError){
+    this->connected = true;
+    this->millisLastServerMessage = millis();
+  }
   
   return connectionBeginError;
 }
 
 HoneycombError HoneycombClient::authenticate(uint64_t deviceID, const char* deviceSecret){
-  const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT);
+  const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT) != 0;
   if(beginMessageError){
     this->connected = false;
     this->authenticated = false;
-    return HoneycombError::outboundMessageInit;
+    return HoneycombError::outboundMessageSend;
   }
   
   JsonDocument json;
@@ -41,7 +44,7 @@ HoneycombError HoneycombClient::authenticate(uint64_t deviceID, const char* devi
   
   this->webSocketConnection.write((uint8_t*)(this->scratchpadBuffer), stringifiedJSONBytes);
   
-  const bool endMessageError = this->webSocketConnection.endMessage();
+  const bool endMessageError = this->webSocketConnection.endMessage() != 0;
   if(endMessageError){
     this->connected = false;
     this->authenticated = false;
@@ -52,80 +55,83 @@ HoneycombError HoneycombClient::authenticate(uint64_t deviceID, const char* devi
 }
 
 HoneycombError HoneycombClient::pingServer(){
-  const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT);
+  const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT) != 0;
   if(beginMessageError){
     this->connected = false;
     this->authenticated = false;
-    return HoneycombError::outboundMessageInit;
+    return HoneycombError::outboundMessageSend;
   }
   
   const char pingMessage[] = "{\"__messageType\":\"ping\"}";
-  this->webSocketConnection.write((uint8_t*)pingMessage, sizeof(pingMessage)-1);
+  this->webSocketConnection.write((uint8_t*)pingMessage, sizeof(pingMessage) - sizeof('\0'));
 
-  const bool endMessageError = this->webSocketConnection.endMessage();
+  const bool endMessageError = this->webSocketConnection.endMessage() != 0;
   if(endMessageError){
     this->connected = false;
     this->authenticated = false;
     return HoneycombError::outboundMessageSend;
   }
-  this->millisLastServerMessage = millis();
   return HoneycombError::ok;
 }
 
 HoneycombError HoneycombClient::readIncomingMessages(){
+  if(not (this->connected)) return HoneycombError::disconnectedWebSocket;
+
   JsonDocument json;
-  const int messageBytes = this->webSocketConnection.parseMessage();
+  const size_t messageBytes = this->webSocketConnection.parseMessage();  
+  
   if(messageBytes == 0){
     const bool connectionStale = millis() - this->millisLastServerMessage >= this->maxMsBeforeTimeout;
-    return connectionStale ? HoneycombError::connectionStale : HoneycombError::ok;
+    if(not connectionStale) return HoneycombError::ok;
+    this->connected = false;
+    this->authenticated = false;
+    return HoneycombError::connectionStale;
   }
   
   this->millisLastServerMessage = millis();
 
   if(messageBytes > this->maxIncomingBytes)
     return HoneycombError::maxSize;
-  if(this->webSocketConnection.messageType() == TYPE_BINARY)
-    return HoneycombError::notText;
+  if(this->webSocketConnection.messageType() != TYPE_TEXT)
+    return HoneycombError::receivedMessageNotText;
 
   const DeserializationError parsingError = deserializeJson(json, this->webSocketConnection.readString());
   if(parsingError != DeserializationError::Ok)
     return deserializationErrorToHoneycombError(parsingError);
 
   if(json["__messageType"].isNull())
-    return HoneycombError::unclearType;
+    return HoneycombError::unknownReceivedMessageType;
   
   constexpr int strncmp_equal = 0;
   if(strncmp(json["__messageType"], "patch", sizeof("patch")) == strncmp_equal){
-    if(!(this->variablesFromServer)) return HoneycombError::noHandler;
+    if(!(this->variablesFromServer)) return HoneycombError::noOutJsonContainer;
     *(this->variablesFromServer) = Optional(true, json);
-    Serial.println(this->variablesFromServer->errorCode);
     return HoneycombError::ok;
   }
   if(strncmp(json["__messageType"], "auth", sizeof("auth")) == strncmp_equal){
     this->authenticated = false;
     
-    if(not json["error"].isNull()) return HoneycombError::authenticate;
-    if(not (json["success"].as<bool>())) return HoneycombError::authenticate;
+    if(not json["error"].isNull()) return HoneycombError::invalidAuthenticateRequest;
+    if(not (json["success"].as<bool>())) return HoneycombError::otherConnectedDeviceHasSameID;
     this->authenticated = true;
     return HoneycombError::ok;
   }
   if(strncmp(json["__messageType"], "error", sizeof("error")) == strncmp_equal){
-    Serial.println(json["error"].as<const char*>());
-    return HoneycombError::unknown;
+    return HoneycombError::messageFormError;
   }
   
-  return HoneycombError::unclearType;
+  return HoneycombError::unknownReceivedMessageType;
 }
 
 HoneycombError deserializationErrorToHoneycombError(const DeserializationError error){
   if(error == DeserializationError::Ok)
     return HoneycombError::ok;
   if(error == DeserializationError::EmptyInput)
-    return HoneycombError::emptyInput;
+    return HoneycombError::jsonEmptyInput;
   if(error == DeserializationError::IncompleteInput)
-    return HoneycombError::incompleteInput;
+    return HoneycombError::jsonIncompleteInput;
   if(error == DeserializationError::InvalidInput)
-    return HoneycombError::invalidInput;
+    return HoneycombError::jsonInvalidInput;
   if(error == DeserializationError::NoMemory)
     return HoneycombError::noMemory;
   if(error == DeserializationError::TooDeep)

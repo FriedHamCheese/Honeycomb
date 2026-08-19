@@ -2,7 +2,7 @@
 #include "Honeycomb.hpp"
 #include <ESP8266WiFi.h>
 
-HoneycombClient honeycombClient("192.168.1.34", 5001, 1024, 15000);
+HoneycombClient honeycombClient("192.168.1.34", 5001, 1024, 5000);
 Optional<bool, JsonDocument> variableUpdateFromServer;
 
 void setup() {
@@ -45,7 +45,6 @@ void loop() {
     }
   }
 
-
   if(not honeycombClient.isConnected()){
     const int honeycombInitError = honeycombClient.begin();
     if(honeycombInitError){
@@ -54,21 +53,37 @@ void loop() {
       Serial.println(')');
       return;
     }
+    Serial.println("Connected to server.");
   }
   if(not honeycombClient.isAuthenticated()){
-    const HoneycombError authError = honeycombClient.authenticate(6, "cookies");
+    const HoneycombError authError = honeycombClient.authenticate(secrets::deviceID, secrets::deviceSecret);
     if(authError != HoneycombError::ok){
       Serial.print("Error: error authenticating honeycomb websocket instance (HoneycombError ");
       Serial.print((uint16_t)authError);
       Serial.println(')');
       return;
     }
+	constexpr unsigned long ms_for_auth_processing = 500;
+    delay(ms_for_auth_processing);
+    Serial.println("Authentication sent successfully.");
   }
 
-  honeycombClient.pingServer();
+  const HoneycombError pingError = honeycombClient.pingServer();
+  if(pingError != HoneycombError::ok){
+    Serial.print("Error: error pinging honeycomb websocket instance (HoneycombError ");
+    Serial.print((uint16_t)pingError);
+    Serial.println(')');
+    return;
+  }
+  Serial.println("Ping message sent successfully.");
+
   const HoneycombError honeycombReadError = honeycombClient.readIncomingMessages();
-  if(honeycombReadError == HoneycombError::authenticate){
+  if(honeycombReadError == HoneycombError::invalidAuthenticateRequest){
     Serial.println("Error: Authentication rejected from server.");
+    return;
+  }
+  if(honeycombReadError == HoneycombError::connectionStale){
+    Serial.println("Error: Stale server connection. Reconnecting...");
     return;
   }
   if(honeycombReadError != HoneycombError::ok){
@@ -77,6 +92,8 @@ void loop() {
     Serial.println(')');
     return;
   }
+
+  Serial.println("Read OK.");
   
   if(!variableUpdateFromServer.errorCode) return;
   variableUpdateFromServer.errorCode = false;

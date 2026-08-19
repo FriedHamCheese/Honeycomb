@@ -49,21 +49,24 @@ struct Optional{
 enum class HoneycombError : uint8_t{
   ok,
   maxSize,
-  notText,
-  unclearType,
-  noHandler,
-  authenticate,
+  noOutJsonContainer,
   connectionStale, 
  
-  emptyInput,
-  incompleteInput,
-  invalidInput,
+  jsonEmptyInput,
+  jsonIncompleteInput,
+  jsonInvalidInput,
   noMemory,
   jsonTooDeep,
   
-  outboundMessageInit,
   outboundMessageSend,
-  
+
+  disconnectedWebSocket,
+  otherConnectedDeviceHasSameID,
+
+  receivedMessageNotText,
+  unknownReceivedMessageType,
+  messageFormError,
+  invalidAuthenticateRequest,
   unknown
 };
 

@@ -38,6 +38,7 @@ import {
   HTTP_STATUS_FOR_BAD_REQUEST,
   HTTP_STATUS_FOR_UNAUTHORIZED,
   HTTP_STATUS_FOR_SERVER_ERROR,
+  PORT_NUMBER,
 } from '../constraints.js';
 
 import http from 'node:http';
@@ -45,8 +46,6 @@ import {randomBytes} from 'node:crypto';
 
 import express from "express";
 import cors from "cors";
-
-const PORT_NUMBER = 5001
 
 const app = express();
 app.use(express.json({limit: "1kb"}))
@@ -215,7 +214,10 @@ apiRouter.post(
   }
 );
 
-//Add backslash-proof password handling
+/*
+  Add backslash-proof password handling
+  Have threads to remove stale websockets
+*/
 
 apiRouter.use("/device", deviceRouter);
 app.use("/apiv1", apiRouter);

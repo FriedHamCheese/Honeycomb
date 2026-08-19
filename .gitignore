@@ -1,2 +1,3 @@
 server/node_modules/*
 arduino/Honeycomb/secrets.hpp
+/server_mock/node_modules
