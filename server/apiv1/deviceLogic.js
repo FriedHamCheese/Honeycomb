@@ -1,12 +1,12 @@
 import {
   parseBodyToSQLTableAttributes,
-} from "./utils.js";
+} from "../utils.js";
 
 import {
   saltAndRehash,
   deviceViewingSecretAuthentication,
   secretAuthenticationError,
-} from './auth.js';
+} from '../auth.js';
 
 import {randomBytes} from 'node:crypto';
 
@@ -56,7 +56,7 @@ export async function createInitialDeviceTable(
   );
   
   const finalTableAttributes = "__datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT, " + sqlTableAttributes;
-  const createTableQuery = `CREATE TABLE ${deviceIDStr}_0 (${finalTableAttributes});`; 
+  const createTableQuery = `CREATE TABLE ${getDeviceTableNameFromID(deviceIDStr)} (${finalTableAttributes});`; 
   await honeycombDBConnection.execute(createTableQuery);
   return warnings;
 }
@@ -73,15 +73,14 @@ export async function deleteDevice(
   */
   const honeycombDBConnection = await honeycombDBConnectionPool.getConnection();
   try{
-    const [tableNamesOfDevice] = await sqlConnectionPool.execute(`SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME LIKE '${deviceIDStr}%'`);    
     const promises = [];
 
     await honeycombDBConnection.beginTransaction();
-    promises.push(honeycombDBConnection.execute("DELETE FROM Device WHERE deviceID = ?", [deviceIDInt]));
-    for(const tableName of tableNamesOfDevice)
-      promises.push(honeycombDBConnection.execute(`DROP TABLE ${tableName.TABLE_NAME}`));  
-    
-    await Promise.all(promises);
+    await Promise.all([
+      honeycombDBConnection.execute("DELETE FROM Device WHERE deviceID = ?", [deviceIDInt]),
+      honeycombDBConnection.execute(`DROP TABLE ${getDeviceTableNameFromID(deviceIDStr)}`)
+    ]);
+
     await honeycombDBConnection.commit();
   }catch(err){
     await honeycombDBConnection.rollback();
@@ -199,8 +198,8 @@ export async function createCompositeDeviceView(
   );
   if(device1AuthError) return createCompositeDeviceViewError.DEVICE1_VIEWING_SECRET;
   
-  const device0TableName = objectFromRequest.device0ID + "_0";
-  const device1TableName = objectFromRequest.device1ID + "_0";
+  const device0TableName = getDeviceTableNameFromID(objectFromRequest.device0ID);
+  const device1TableName = getDeviceTableNameFromID(objectFromRequest.device1ID);
   
   const trimmedDevice0ConditionField = objectFromRequest.device0ConditionField.trim();
   const trimmedDevice1ConditionField = objectFromRequest.device1ConditionField.trim();
@@ -230,13 +229,13 @@ export async function createCompositeDeviceView(
   if(columnNotSameType) return createCompositeDeviceView.DATATYPE_MISMATCH;
   
   for(let i = 0; i < device0Columns.length; i++)
-    device0Columns[i] = `${device0TableName}.${device0Columns[i].COLUMN_NAME} AS ${device0TableName}_${device0Columns[i].COLUMN_NAME}`
+    device0Columns[i] = `${device0TableName}.${device0Columns[i].COLUMN_NAME} AS ${objectFromRequest.device0ID}_${device0Columns[i].COLUMN_NAME}`
   for(let i = 0; i < device1Columns.length; i++)
-    device1Columns[i] = `${device1TableName}.${device1Columns[i].COLUMN_NAME} AS ${device1TableName}_${device1Columns[i].COLUMN_NAME}`
+    device1Columns[i] = `${device1TableName}.${device1Columns[i].COLUMN_NAME} AS ${objectFromRequest.device1ID}_${device1Columns[i].COLUMN_NAME}`
   const columnsWithDevicePrefix = device0Columns.concat(device1Columns);
   const columnsWithDevicePrefixStr = columnsWithDevicePrefix.join(',');
   
-  const viewWithoutCondition = `CREATE VIEW ${deviceID}_0 AS SELECT ${columnsWithDevicePrefixStr} FROM ${device0TableName}, ${device1TableName}`;
+  const viewWithoutCondition = `CREATE VIEW ${getDeviceTableNameFromID(deviceID)} AS SELECT ${columnsWithDevicePrefixStr} FROM ${device0TableName}, ${device1TableName}`;
   const MERGE_ON_EQUAL_VALUES = 0;
   const MERGE_ON_VALUE_WITHIN_RANGE = 1;
   
@@ -258,4 +257,8 @@ export async function createCompositeDeviceView(
   }
   
   return createCompositeDeviceViewError.MERGING_CONDITION;
+}
+
+export function getDeviceTableNameFromID(deviceIDStr){
+  return `Device${deviceIDStr}_Table`;
 }

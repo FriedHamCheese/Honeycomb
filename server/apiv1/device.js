@@ -6,7 +6,8 @@ import {
   createCompositeDeviceView,
   createCompositeDeviceViewError,
   createCompositeDeviceViewErrorStr,
-} from '../api_methods.js';
+  getDeviceTableNameFromID,
+} from './deviceLogic.js';
 
 import {
   sqlConnectionPool,
@@ -57,7 +58,7 @@ deviceRouter.post(
     - HTTP status 500 for undocumented server errors
     */
     const objectFromResponse = request.body;
-    const tableName = `${request.deviceIDStr}_0`;
+    const tableName = getDeviceTableNameFromID(request.deviceIDInt);
     
     try{
       const isCompositeDevice = !(await addDatapoint(objectFromResponse, tableName, sqlConnectionPool, honeycombDBConnectionPool, request.deviceIDInt));
@@ -263,7 +264,7 @@ deviceRouter.get(
           "SELECT deviceName FROM Device WHERE deviceID = ?", [request.deviceIDInt]
         ),
         honeycombDBConnectionPool.execute(
-          `SELECT * FROM ${request.deviceIDStr}_0`
+          `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}`
         ),
       ]);
       

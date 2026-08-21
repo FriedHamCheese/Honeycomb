@@ -5,12 +5,8 @@ import {
   MAX_WEBSOCKET_TO_SERVER_BYTES,
   WEBSOCKET_MS_BEFORE_STALE,
   } from '../../constraints.js';
-import {
-  addDatapoint
-} from '../api_methods.js';
-import {
-  deviceSecretAuthentication, secretAuthenticationError
-} from '../auth.js';
+import {addDatapoint} from './deviceLogic.js';
+import {deviceSecretAuthentication, secretAuthenticationError} from '../auth.js';
 
 import {WebSocketServer} from 'ws';
 
@@ -247,9 +243,9 @@ export async function toMCUOnMessage(
       }
       case("patch"):{
         if(!connection)
-          return client.send(JSON.stringify{
+          return client.send(JSON.stringify({
             __messageType: "error", error: "patch message requires authentication beforehand."
-          });
+          }));
         const isCompositeDevice = !(await addDatapoint(
           objectFromRequest, 
           `${connection.getDeviceID()}_0`, 

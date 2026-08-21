@@ -57,28 +57,28 @@ INSERT INTO Device(deviceSecretSalt, saltedDeviceSecret, saltedViewingSecret, de
     1
 );
 
-CREATE TABLE 1_0(
+CREATE TABLE Device1_Table(
   __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
   temperature_celsius FLOAT,
   relative_humidity_percent FLOAT,
   epoch_seconds FLOAT
 );
 
-INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.0, 50.0, 0.0);
-INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.5, 51.5, 2.0);
-INSERT INTO 1_0 (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.75, 51.0, 3.0);  
+INSERT INTO Device1_Table (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.0, 50.0, 0.0);
+INSERT INTO Device1_Table (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.5, 51.5, 2.0);
+INSERT INTO Device1_Table (temperature_celsius, relative_humidity_percent, epoch_seconds) VALUES(27.75, 51.0, 3.0);  
 
-CREATE TABLE 2_0(
+CREATE TABLE Device2_Table(
   __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
   CO2_ppm FLOAT,
   epoch_seconds FLOAT  
 );
 
-INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 0.0);
-INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 1.5);
-INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 3.75);
+INSERT INTO Device2_Table (CO2_ppm, epoch_seconds) VALUES(0.5, 0.0);
+INSERT INTO Device2_Table (CO2_ppm, epoch_seconds) VALUES(0.5, 1.5);
+INSERT INTO Device2_Table (CO2_ppm, epoch_seconds) VALUES(0.5, 3.75);
 
-CREATE TABLE 3_0(
+CREATE TABLE Device3_Table(
   __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
   temperature_celsius FLOAT,
   relative_humidity_percent FLOAT,
