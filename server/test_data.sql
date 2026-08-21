@@ -42,6 +42,21 @@ INSERT INTO Device(deviceSecretSalt, saltedDeviceSecret, saltedViewingSecret, de
     1
 );
 
+/*
+deviceSecret: AkJir9WCYsd%zrHyJPr4xr8m
+devicViewingSecret: oBoA^&B2UCamE97e%S47PNRe
+output: sha512(arg + deviceSecretSalt).hex()
+*/
+INSERT INTO Device(deviceSecretSalt, saltedDeviceSecret, saltedViewingSecret, deviceName, isCompositeDevice, ownerUserID) 
+  VALUES (
+    "267f05f9db0b704f3cdf08180ebed42a", 
+    "df1068b79a0c85a0fc821cd2923a15c5140972d61317ba0483743d9199ab204cd730acc9dba13eb6e3bd8e29dbd8652714bfb2e985f405f189b892fad093f816",
+    "98460c5fa3056d9b313fa4f7584e27aff6e33ada06f6c88e329138e3b835c30e1fbea011ac7d1b961feb5c72c367d21c260fa17b388538b3b2972e121f1f2f44",
+    "MCU Test",
+    false,
+    1
+);
+
 CREATE TABLE 1_0(
   __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
   temperature_celsius FLOAT,
@@ -62,5 +77,12 @@ CREATE TABLE 2_0(
 INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 0.0);
 INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 1.5);
 INSERT INTO 2_0 (CO2_ppm, epoch_seconds) VALUES(0.5, 3.75);
+
+CREATE TABLE 3_0(
+  __datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT,
+  temperature_celsius FLOAT,
+  relative_humidity_percent FLOAT,
+  notes VARCHAR(32)
+);
 
 COMMIT;

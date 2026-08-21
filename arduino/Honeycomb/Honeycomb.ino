@@ -2,8 +2,18 @@
 #include "Honeycomb.hpp"
 #include <ESP8266WiFi.h>
 
-HoneycombClient honeycombClient("192.168.1.34", 5001, 1024, 5000);
+const uint16_t maxIncomingBytes = 1024;
+const uint16_t msBeforeServerStale = 5000;
+HoneycombClient honeycombClient(
+  secrets::serverAddress, 
+  secrets::serverPort, 
+  maxIncomingBytes, 
+  msBeforeServerStale, 
+  secrets::deviceID, 
+  secrets::deviceSecret
+);
 Optional<bool, JsonDocument> variableUpdateFromServer;
+JsonDocument newDatapointToServer;
 
 void setup() {
   Serial.begin(9600);
@@ -14,7 +24,7 @@ void setup() {
 }
 
 void loop() {
-  delay(500);
+  delay(2000);
 
   const auto wifiStatus = WiFi.status();
   if(wifiStatus != WL_CONNECTED){
@@ -56,7 +66,7 @@ void loop() {
     Serial.println("Connected to server.");
   }
   if(not honeycombClient.isAuthenticated()){
-    const HoneycombError authError = honeycombClient.authenticate(secrets::deviceID, secrets::deviceSecret);
+    const HoneycombError authError = honeycombClient.authenticate();
     if(authError != HoneycombError::ok){
       Serial.print("Error: error authenticating honeycomb websocket instance (HoneycombError ");
       Serial.print((uint16_t)authError);
@@ -94,6 +104,16 @@ void loop() {
   }
 
   Serial.println("Read OK.");
+
+  newDatapointToServer["temperature_celsius"] = 27.0;
+  newDatapointToServer["relative_humidity_percent"] = 80.0;
+  newDatapointToServer["notes"] = "Ice cream";
+  const HoneycombError honeycombPatchError = honeycombClient.patchDatapoint(newDatapointToServer.as<JsonObjectConst>());
+  if(honeycombPatchError != HoneycombError::ok){
+    Serial.print("Error: Honeycomb patch error (HoneycombError ");
+    Serial.print((uint16_t)honeycombPatchError);
+    Serial.println(')');
+  }
   
   if(!variableUpdateFromServer.errorCode) return;
   variableUpdateFromServer.errorCode = false;

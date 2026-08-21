@@ -1,4 +1,6 @@
 import {MAX_WEBSOCKET_TO_SERVER_BYTES, PORT_NUMBER} from '../constraints.js';
+import express from 'express';
+import cors from 'cors';
 
 import {WebSocketServer} from 'ws';
 import readline from 'node:readline/promises';
@@ -7,9 +9,9 @@ import http from 'node:http';
 import {setTimeout} from 'node:timers/promises';
 
 const terminal = readline.createInterface({input: stdin, output: stdout});
-const httpServer = http.createServer();
+let httpServer = http.createServer();
 const MS_FOR_TERMINAL_SYNC = 500;
-const MS_FOR_SENDING_MESSAGE = 1000;
+const MS_FOR_SENDING_MESSAGE = 2000;
 
 await setTimeout(MS_FOR_TERMINAL_SYNC, 'result');
 console.log("Mock server script for Arduino-end testing.");
@@ -71,8 +73,8 @@ async function testSuccessfulAuth(){
         
         const isCorrectMessage = (
           (objectFromMessage.__messageType === 'auth')
-          && (objectFromMessage.deviceID === 1) 
-          && (objectFromMessage.deviceSecret === "I!7T#'q3%uB]yP4U03llRw.1")
+          && (objectFromMessage.deviceID === 3) 
+          && (objectFromMessage.deviceSecret === "AkJir9WCYsd%zrHyJPr4xr8m")
         );
         if(!isCorrectMessage){
           console.error(`testSuccessfulAuth(): Failed: Message is not correct.`);
@@ -209,11 +211,70 @@ async function testSendDataToMCU(){
   httpServer.close();   
 }
 
+async function testPatchMessage(){
+  await terminal.question("> Validate HTTP patch message?");  
+  
+  const httpRouter = express();
+  httpRouter.use(cors());
+  httpRouter.use(express.json());
+  httpRouter.post("/apiv1/device/:deviceID/datapoint", function (request, response){
+    const deviceIDInt = Number.parseInt(request.params.deviceID);
+    if(deviceIDInt !== 3){
+      console.error("  > HTTP router: deviceID URL part is not 3.");
+      response.status(400).send({});
+      return;
+    }
+    if(request.get('Authorization') !== "AkJir9WCYsd%zrHyJPr4xr8m"){
+      console.error("  > HTTP router: invalid authorization header for device 3.");
+      response.status(401).send({});
+      return;
+    }
+    if((typeof request.body) !== "object"){
+      console.error("  > HTTP router: request body not JSON.");
+      response.status(400).send({});
+      return;
+    }
+    const isCorrectJSON = (
+      (request.body.temperature_celsius === 27.0) 
+      && (request.body.relative_humidity_percent === 80.0) 
+      && (request.body.notes === "Ice cream")
+    );
+    if(isCorrectJSON){
+      console.log("  > HTTP router: patch request message ok.");
+      return response.status(201).send({});
+    }
+    console.error("  > HTTP router: patch request incorrect.");
+    return response.status(201).send({});
+  });
+  
+  httpServer = http.createServer(httpRouter);
+  const server = new WebSocketServer({path: "/toDevice", server: httpServer});
+  let clientSocket;
+  
+  server.on('connection', async function (clientWebSocket){
+    server.close();
+    clientSocket = clientWebSocket;
+
+    clientWebSocket.on('message', async function (data){
+      clientWebSocket.send(JSON.stringify({__messageType: "auth", success: true}));
+      await setTimeout(MS_FOR_SENDING_MESSAGE, 'result');
+    });
+    clientWebSocket.on('error', function (errorEvent){
+      console.error(errorEvent);
+    });  
+  });
+  httpServer.listen(PORT_NUMBER);
+  await terminal.question("  > Terminal received expected message?");
+  if(clientSocket) clientSocket.close();
+  httpServer.close();
+}
+
 
 await testWebSocketConnectionHandling();
 await testSuccessfulAuth();
 await testAuthDeviceIDCollision();
 await testSendDataToMCU();
+await testPatchMessage();
 
 await setTimeout(MS_FOR_TERMINAL_SYNC, 'result');
 terminal.close();

@@ -6,6 +6,9 @@ import {
   WEBSOCKET_MS_BEFORE_STALE,
   } from '../../constraints.js';
 import {
+  addDatapoint
+} from '../api_methods.js';
+import {
   deviceSecretAuthentication, secretAuthenticationError
 } from '../auth.js';
 
@@ -132,7 +135,10 @@ export class WebSocketRouterToMCU{
     May raise undocumented exceptions.
     Returns true if the connection is found and the string is sent, false if not found.
     */
-    const connection = this.#authenticatedConnections.find((element) => {return element.getDeviceID() === deviceID;});
+    const connection = this.#authenticatedConnections.find((element) => {
+      if(!element) return false;
+      return element.getDeviceID() === deviceID;
+    });
     if(!connection) return false;
     connection.getClientWebSocket().send(stringifiedObject);
     return true;
@@ -231,11 +237,32 @@ export async function toMCUOnMessage(
     }));
     
     switch(objectFromRequest.__messageType){
+      case("ping"):{
+        clientWebSocket.send(JSON.stringify({__messageType: "pong"}));  
+        break;
+      };
       case("auth"):{
         await handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleAuthenticatedConnections, addAuthenticatedConnection);
         break;
       }
-      case("ping"): break;
+      case("patch"):{
+        if(!connection)
+          return client.send(JSON.stringify{
+            __messageType: "error", error: "patch message requires authentication beforehand."
+          });
+        const isCompositeDevice = !(await addDatapoint(
+          objectFromRequest, 
+          `${connection.getDeviceID()}_0`, 
+          sqlConnectionPool, 
+          honeycombDBConnectionPool, 
+          connection.getDeviceID())
+        );
+        if(isCompositeDevice)
+          return clientWebSocket.send(JSON.stringify({
+            __messageType: "error", error: "Cannot add datapoint to composite device."})
+          );
+        break;
+      }
       default:
       clientWebSocket.send(JSON.stringify({
         __messageType: "error", error: `Unrecognised __messageType ${objectFromRequest.__messageType}`

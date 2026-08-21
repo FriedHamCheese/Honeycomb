@@ -63,6 +63,12 @@ enum class HoneycombError : uint8_t{
   disconnectedWebSocket,
   otherConnectedDeviceHasSameID,
 
+  httpConnectionFailed,
+  httpApiError,
+  httpTimedout,
+  httpInvalidServerResponse,
+  httpInvalidRequest,
+
   receivedMessageNotText,
   unknownReceivedMessageType,
   messageFormError,
@@ -72,22 +78,35 @@ enum class HoneycombError : uint8_t{
 
 class HoneycombClient{
   public:
-  HoneycombClient(const char* serverURL, uint16_t serverPort, uint16_t maxIncomingBytes, unsigned long maxMsBeforeTimeout);
-  //so what happens if mcu lost wifi?
+  HoneycombClient(
+    const char* serverURL,
+    uint16_t serverPort, 
+    uint16_t maxIncomingBytes, 
+    unsigned long maxMsBeforeTimeout,
+    uint64_t deviceID,
+    const char* deviceSecret
+  );
   int begin();
-  HoneycombError authenticate(uint64_t deviceID, const char* deviceSecret);
+  HoneycombError authenticate();
   HoneycombError pingServer();
   HoneycombError readIncomingMessages();
+  HoneycombError patchDatapoint(JsonObjectConst jsonRef);
 
   Optional<bool, JsonDocument>* variablesFromServer;
 
   static constexpr uint16_t scratchpadBufferBytes = 512;
+  static constexpr uint16_t patchDatapointURLLength = 64;
 
   private:
+  //Buffer is not multithreading-proof if writes or reads are executed simultaneously
   char scratchpadBuffer[scratchpadBufferBytes];
   WiFiClient wifiClient;
   WebSocketClient webSocketConnection;
+  HttpClient httpConnection;
   
+  char patchDatapointURL[patchDatapointURLLength];
+  const char* deviceSecret;
+  uint64_t deviceID;
   unsigned long millisLastServerMessage;
   unsigned long maxMsBeforeTimeout;
   uint16_t maxIncomingBytes;
@@ -105,5 +124,6 @@ class HoneycombClient{
 };
 
 HoneycombError deserializationErrorToHoneycombError(const DeserializationError error);
+HoneycombError httpErrorToHoneycombError(int error);
 
 #endif
