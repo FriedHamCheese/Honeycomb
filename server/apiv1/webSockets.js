@@ -5,7 +5,7 @@ import {
   MAX_WEBSOCKET_TO_SERVER_BYTES,
   WEBSOCKET_MS_BEFORE_STALE,
   } from '../../constraints.js';
-import {addDatapoint} from './deviceLogic.js';
+import {addDatapointLogic} from './deviceLogic.js';
 import {deviceSecretAuthentication, secretAuthenticationError} from '../auth.js';
 
 import {WebSocketServer} from 'ws';

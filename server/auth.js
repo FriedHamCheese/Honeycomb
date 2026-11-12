@@ -37,9 +37,9 @@ export const secretAuthenticationError = {
   SECRET: 2,
 };
 
-export async function deviceViewingSecretAuthentication(deviceID, secret, honeycombDBConnection){  
-  const [deviceFromID] = await honeycombDBConnection.execute(
-    "SELECT saltedViewingSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
+export async function deviceViewingSecretAuthentication(deviceID, secret, sqlConnection){  
+  const [deviceFromID] = await sqlConnection.execute(
+    "SELECT saltedViewingSecret, deviceSecretSalt FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
   );
   if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   
@@ -48,9 +48,9 @@ export async function deviceViewingSecretAuthentication(deviceID, secret, honeyc
   return (matchingSaltedViewingSecret ? secretAuthenticationError.OK : secretAuthenticationError.SECRET);
 }
 
-export async function deviceSecretAndViewingSecretAuthentication(deviceID, secret, viewingSecret, honeycombDBConnection){
-  const [deviceFromID] = await honeycombDBConnection.execute(
-    "SELECT saltedViewingSecret, saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
+export async function deviceSecretAndViewingSecretAuthentication(deviceID, secret, viewingSecret, sqlConnection){
+  const [deviceFromID] = await sqlConnection.execute(
+    "SELECT saltedViewingSecret, saltedDeviceSecret, deviceSecretSalt FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
   );
   if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   

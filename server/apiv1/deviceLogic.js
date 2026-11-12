@@ -61,8 +61,7 @@ export async function createInitialDeviceTable(
   return warnings;
 }
 
-export async function deleteDevice(
-  honeycombDBConnectionPool,
+export async function deleteDeviceLogic(
   sqlConnectionPool,
   deviceIDStr,
   deviceIDInt
@@ -71,24 +70,24 @@ export async function deleteDevice(
   Exceptions: exceptions from SQL connections, connection pools or command execution.
   Returns nothing.
   */
-  const honeycombDBConnection = await honeycombDBConnectionPool.getConnection();
+  const sqlConnection = await sqlConnectionPool.getConnection();
   try{
     const promises = [];
 
-    await honeycombDBConnection.beginTransaction();
+    await sqlConnection.beginTransaction();
     await Promise.all([
-      honeycombDBConnection.execute("DELETE FROM Device WHERE deviceID = ?", [deviceIDInt]),
-      honeycombDBConnection.execute(`DROP TABLE ${getDeviceTableNameFromID(deviceIDStr)}`)
+      sqlConnection.execute("DELETE FROM Honeycomb.Device WHERE deviceID = ?", [deviceIDInt]),
+      sqlConnection.execute(`DROP TABLE Honeycomb.${getDeviceTableNameFromID(deviceIDStr)}`)
     ]);
 
-    await honeycombDBConnection.commit();
+    await sqlConnection.commit();
   }catch(err){
-    await honeycombDBConnection.rollback();
-    honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
+    await sqlConnection.rollback();
+    sqlConnectionPool.releaseConnection(sqlConnection);
     throw err;
   }
   
-  honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
+  sqlConnectionPool.releaseConnection(sqlConnection);
 }
 
 export async function addDatapointLogic(
@@ -158,9 +157,8 @@ export const createCompositeDeviceViewErrorStr = {
   9: "Specified merging condition columns of device 0 and device 1 have type mismatch",
 };
 
-export async function createCompositeDeviceView(
-  sqlConnectionPool,
-  honeycombDBConnection,
+export async function createCompositeDeviceViewLogic(
+  sqlConnection,
   objectFromRequest,
   deviceID,
 ){
@@ -188,12 +186,12 @@ export async function createCompositeDeviceView(
     return createCompositeDeviceViewError.MERGING_CONDITION;
   
   const device0AuthError = await deviceViewingSecretAuthentication(
-    objectFromRequest.device0ID, objectFromRequest.device0ViewingSecret, honeycombDBConnection
+    objectFromRequest.device0ID, objectFromRequest.device0ViewingSecret, sqlConnection
   );
   if(device0AuthError) return createCompositeDeviceViewError.DEVICE0_VIEWING_SECRET;
   
   const device1AuthError = await deviceViewingSecretAuthentication(
-    objectFromRequest.device1ID, objectFromRequest.device1ViewingSecret, honeycombDBConnection
+    objectFromRequest.device1ID, objectFromRequest.device1ViewingSecret, sqlConnection
   );
   if(device1AuthError) return createCompositeDeviceViewError.DEVICE1_VIEWING_SECRET;
   
@@ -203,11 +201,11 @@ export async function createCompositeDeviceView(
   const trimmedDevice0ConditionField = objectFromRequest.device0ConditionField.trim();
   const trimmedDevice1ConditionField = objectFromRequest.device1ConditionField.trim();
   
-  const [device0Columns] = await sqlConnectionPool.execute(
+  const [device0Columns] = await sqlConnection.execute(
     "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", 
     [device0TableName]
   );
-  const [device1Columns] = await sqlConnectionPool.execute(
+  const [device1Columns] = await sqlConnection.execute(
     "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", 
     [device1TableName]
   );
@@ -234,13 +232,13 @@ export async function createCompositeDeviceView(
   const columnsWithDevicePrefix = device0Columns.concat(device1Columns);
   const columnsWithDevicePrefixStr = columnsWithDevicePrefix.join(',');
   
-  const viewWithoutCondition = `CREATE VIEW ${getDeviceTableNameFromID(deviceID)} AS SELECT ${columnsWithDevicePrefixStr} FROM ${device0TableName}, ${device1TableName}`;
+  const viewWithoutCondition = `CREATE VIEW Honeycomb.${getDeviceTableNameFromID(deviceID)} AS SELECT ${columnsWithDevicePrefixStr} FROM Honeycomb.${device0TableName}, Honeycomb.${device1TableName}`;
   const MERGE_ON_EQUAL_VALUES = 0;
   const MERGE_ON_VALUE_WITHIN_RANGE = 1;
   
   if(objectFromRequest.mergeUsingCondition === MERGE_ON_EQUAL_VALUES){
-    const viewWithCondition = `${viewWithoutCondition} WHERE ${device0TableName}.${trimmedDevice0ConditionField} = ${device1TableName}.${trimmedDevice1ConditionField}`;
-    honeycombDBConnection.execute(viewWithCondition);
+    const viewWithCondition = `${viewWithoutCondition} WHERE Honeycomb.${device0TableName}.${trimmedDevice0ConditionField} = Honeycomb.${device1TableName}.${trimmedDevice1ConditionField}`;
+    sqlConnection.execute(viewWithCondition);
     return createCompositeDeviceViewError.OK;
   }
   
@@ -250,8 +248,8 @@ export async function createCompositeDeviceView(
     if(Number.isNaN(objectFromRequest.mergeConditionArgument))
       return createCompositeDeviceViewError.MERGING_CONDITION_ARGUMENT;
     
-    const withinRangeCondition = ` WHERE ABS(${device0TableName}.${trimmedDevice0ConditionField} - ${device1TableName}.${trimmedDevice1ConditionField}) <= ${objectFromRequest.mergeConditionArgument}`;
-    await honeycombDBConnection.execute(viewWithoutCondition + withinRangeCondition);
+    const withinRangeCondition = ` WHERE ABS(Honeycomb.${device0TableName}.${trimmedDevice0ConditionField} - ${device1TableName}.${trimmedDevice1ConditionField}) <= ${objectFromRequest.mergeConditionArgument}`;
+    await sqlConnection.execute(viewWithoutCondition + withinRangeCondition);
     return createCompositeDeviceViewError.OK;
   }
   

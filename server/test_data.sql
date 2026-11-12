@@ -12,6 +12,9 @@ INSERT INTO UserObject(email, saltedPassword, salt, name) VALUES(
   "Jane Doe"
 );
 
+COMMIT;
+
+START TRANSACTION;
 /*
 deviceSecret: I!7T#'q3%uB]yP4U03llRw.1
 deviceViewingSecret: Z8^8MCm3u|US7Xc=_LZo2-`V

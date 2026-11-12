@@ -1,9 +1,9 @@
 import {
-  registerDevice,
+  registerDeviceLogic,
   createInitialDeviceTable, 
-  deleteDevice,
-  addDatapoint,
-  createCompositeDeviceView,
+  addDatapointLogic,
+  deleteDeviceLogic,
+  createCompositeDeviceViewLogic,
   createCompositeDeviceViewError,
   createCompositeDeviceViewErrorStr,
   getDeviceTableNameFromID,
@@ -147,149 +147,136 @@ export async function registerDevice(request, response, sqlConnectionPool, regis
   }
 }
 
-deviceRouter.post(
-  "/compositeDevice",
-  checkCachedLoginMiddleware,
-  async (request, response) => {
-    /*
-    input:
-    - Authorization: user session token, uuid-hex, str[36]
-    - {
-      __deviceName: str[1-32],
-      __deviceSecret: str[0-32],
-      __deviceViewingSecret: str[0-32],
-      
-      device0ID: int,
-      device0ViewingSecret: str[0-32],
-      device1ID: int,
-      device1ViewingSecret: str[0-32],
-      
-      device0ConditionField: str[1-32],
-      device1ConditionField: str[1-32],
-      mergeUsingCondition: enum int{
-        0 = equal
-        1 = within range
-      },
-      mergeConditionArgument: null, float
-    }
+export async function registerCompositeDevice(request, response, sqlConnectionPool, registerDeviceLogic){
+  /*
+  input:
+  - Authorization: user session token, uuid-hex, str[36]
+  - {
+    __deviceName: str[1-32],
+    __deviceSecret: str[0-32],
+    __deviceViewingSecret: str[0-32],
     
-    Returns:
-    - HTTP status 201 with {
-      message: str
-      deviceID: int
-    } if successful
-    - HTTP status 400 with .error:str, if request is invalid
-    - HTTP status 401 if user session token is invalid
-    - HTTP status 500 for undocumented server errors
-    */
+    device0ID: int,
+    device0ViewingSecret: str[0-32],
+    device1ID: int,
+    device1ViewingSecret: str[0-32],
     
-    if((typeof request.body.__deviceSecret) !== "string")
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceSecret not string type."});
-    if((typeof request.body.__deviceViewingSecret) !== "string")
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceViewingSecret not string type."});
-    if((typeof request.body.__deviceName) !== "string")
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceName not string type."});    
-    
-    const deviceSecretTrimmed = request.body.__deviceSecret
-      .substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
-      .trim()
-    ;
-    const deviceViewingSecretTrimmed = request.body.__deviceViewingSecret
-      .substring(FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
-      .trim()
-    ;
+    device0ConditionField: str[1-32],
+    device1ConditionField: str[1-32],
+    mergeUsingCondition: enum int{
+      0 = equal
+      1 = within range
+    },
+    mergeConditionArgument: null, float
+  }
   
-    const deviceNameTrimmed = request.body.__deviceName
-      .substring(FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
-      .trim()
-    ;
-    if(deviceNameTrimmed.length < MIN_DEVICE_NAME_CHARACTERS){
+  Returns:
+  - HTTP status 201 with {
+    message: str
+    deviceID: int
+  } if successful
+  - HTTP status 400 with .error:str, if request is invalid
+  - HTTP status 401 if user session token is invalid
+  - HTTP status 500 for undocumented server errors
+  */
+  
+  if((typeof request.body.__deviceSecret) !== "string")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceSecret not string type."});
+  if((typeof request.body.__deviceViewingSecret) !== "string")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceViewingSecret not string type."});
+  if((typeof request.body.__deviceName) !== "string")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceName not string type."});    
+  
+  const deviceSecretTrimmed = request.body.__deviceSecret
+    .substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
+    .trim()
+  ;
+  const deviceViewingSecretTrimmed = request.body.__deviceViewingSecret
+    .substring(FIRST_CHARACTER, MAX_DEVICE_VIEWING_SECRET_CHARACTERS)
+    .trim()
+  ;
+
+  const deviceNameTrimmed = request.body.__deviceName
+    .substring(FIRST_CHARACTER, MAX_DEVICE_NAME_CHARACTERS)
+    .trim()
+  ;
+  if(deviceNameTrimmed.length < MIN_DEVICE_NAME_CHARACTERS){
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+      error: "Device name requires at least 1 character."
+    });
+  }
+ 
+  const sqlConnection = await honeycombDBConnectionPool.getConnection();
+  await sqlConnection.beginTransaction();
+  try{
+    const deviceID = await registerDeviceLogic({
+      sqlConnection, 
+      deviceSecret: deviceSecretTrimmed, 
+      viewingSecret: deviceViewingSecretTrimmed, 
+      deviceName: deviceNameTrimmed, 
+      isCompositeDevice: true, 
+      ownerUserID: request.cachedLogin.userID
+    });
+    const createViewError = await createCompositeDeviceViewLogic(sqlConnection, request.body, deviceID);
+    if(createViewError){
+      await sqlConnection.rollback();
+      honeycombDBConnectionPool.releaseConnection(sqlConnection);          
+      
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
-        error: "Device name requires at least 1 character."
+        error: createCompositeDeviceViewErrorStr[createViewError]
       });
     }
-   
-    const honeycombDBConnection = await honeycombDBConnectionPool.getConnection();
-    await honeycombDBConnection.beginTransaction();
-    try{
-      const deviceID = await registerDeviceLogic({
-        sqlConnection, 
-        deviceSecret: deviceSecretTrimmed, 
-        viewingSecret: deviceViewingSecretTrimmed, 
-        deviceName: deviceNameTrimmed, 
-        isCompositeDevice: true, 
-        ownerUserID: request.cachedLogin.userID
-      });
-      const createViewError = await createCompositeDeviceView(sqlConnectionPool, honeycombDBConnection, request.body, deviceID);
-      if(createViewError){
-        await honeycombDBConnection.rollback();
-        honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);          
-        
-        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
-          error: createCompositeDeviceViewErrorStr[createViewError]
-        });
-      }
-      
-      await honeycombDBConnection.commit();
-      honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
-      response.status(HTTP_STATUS_FOR_CREATED).send({
-        message: `created view for composite device ID ${String(deviceID)}.`,
-        deviceID: deviceID,
-      });
-    }catch(err){
-      await honeycombDBConnection.rollback();
-      honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
-      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
-      console.log(err);
-    }
+    
+    await sqlConnection.commit();
+    honeycombDBConnectionPool.releaseConnection(sqlConnection);
+    response.status(HTTP_STATUS_FOR_CREATED).send({
+      message: `created view for composite device ID ${String(deviceID)}.`,
+      deviceID: deviceID,
+    });
+  }catch(err){
+    await sqlConnection.rollback();
+    honeycombDBConnectionPool.releaseConnection(sqlConnection);
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+    console.log(err);
   }
-);
+}
 
-deviceRouter.get(
-  "/:deviceID",
-  deviceIDParameterValid,
-  checkAuthForDeviceQueryMiddleware,
-  async (request, response) => {
-    try{
-      const [deviceNameResult, tableResult] = await Promise.all([
-        honeycombDBConnectionPool.execute(
-          "SELECT deviceName FROM Device WHERE deviceID = ?", [request.deviceIDInt]
-        ),
-        honeycombDBConnectionPool.execute(
-          `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}`
-        ),
-      ]);
-      
-      const QUERY_RESULT = 0;
-      if(tableResult.length !== 0){
-        webSocketRouterToMCU.putToDevice(JSON.stringify({
-            __messageType: "patch", ...(tableResult.at(-1))
-          }), 
-          request.deviceIDInt
-        );
-      }
-      response.send({
-        deviceName: deviceNameResult[QUERY_RESULT][0].deviceName,
-        table: tableResult[QUERY_RESULT],
-      });
-    }catch(err){
-      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});      
-      throw err;
+export async function getDevice(request, response){
+  try{
+    const [deviceNameResult, tableResult] = await Promise.all([
+      honeycombDBConnectionPool.execute(
+        "SELECT deviceName FROM Device WHERE deviceID = ?", [request.deviceIDInt]
+      ),
+      honeycombDBConnectionPool.execute(
+        `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}`
+      ),
+    ]);
+    
+    const QUERY_RESULT = 0;
+    if(tableResult.length !== 0){
+      webSocketRouterToMCU.putToDevice(JSON.stringify({
+          __messageType: "patch", ...(tableResult.at(-1))
+        }), 
+        request.deviceIDInt
+      );
     }
-});
-
-deviceRouter.delete(
-  "/:deviceID", 
-  deviceIDParameterValid,
-  checkCachedLoginIsDeviceOwnerMiddleware, 
-  async (request, response) => {
-    try{
-      //exceptions from SQL command execution.
-      await deleteDevice(honeycombDBConnectionPool, sqlConnectionPool, request.deviceIDStr, request.deviceIDInt);
-      response.status(HTTP_STATUS_FOR_OK).send({message: `Deleted device ID ${request.deviceIDStr}`});    
-    }catch(err){
-      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
-      throw err;
-    }
+    response.send({
+      deviceName: deviceNameResult[QUERY_RESULT][0].deviceName,
+      table: tableResult[QUERY_RESULT],
+    });
+  }catch(err){
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});      
+    throw err;
   }
-);
+}
+
+export async function deleteDevice(request, response){
+  try{
+    //exceptions from SQL command execution.
+    await deleteDeviceLogic(sqlConnectionPool, request.deviceIDStr, request.deviceIDInt);
+    response.status(HTTP_STATUS_FOR_OK).send({message: `Deleted device ID ${request.deviceIDStr}`});    
+  }catch(err){
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
+    throw err;
+  }
+}
