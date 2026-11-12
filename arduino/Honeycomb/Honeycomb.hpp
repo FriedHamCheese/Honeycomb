@@ -90,21 +90,17 @@ class HoneycombClient{
   HoneycombError authenticate();
   HoneycombError pingServer();
   HoneycombError readIncomingMessages();
-  HoneycombError patchDatapoint(JsonObjectConst jsonRef);
+  HoneycombError patchDatapoint(JsonObject jsonRef);
 
   Optional<bool, JsonDocument>* variablesFromServer;
 
   static constexpr uint16_t scratchpadBufferBytes = 512;
-  static constexpr uint16_t patchDatapointURLLength = 64;
 
   private:
   //Buffer is not multithreading-proof if writes or reads are executed simultaneously
   char scratchpadBuffer[scratchpadBufferBytes];
   WiFiClient wifiClient;
   WebSocketClient webSocketConnection;
-  HttpClient httpConnection;
-  
-  char patchDatapointURL[patchDatapointURLLength];
   const char* deviceSecret;
   uint64_t deviceID;
   unsigned long millisLastServerMessage;

@@ -5,8 +5,9 @@ import {
   MAX_WEBSOCKET_TO_SERVER_BYTES,
   WEBSOCKET_MS_BEFORE_STALE,
   } from '../../constraints.js';
-import {addDatapointLogic} from './deviceLogic.js';
+import {addDatapointLogic, getDeviceTableNameFromID} from './deviceLogic.js';
 import {deviceSecretAuthentication, secretAuthenticationError} from '../auth.js';
+import {sqlConnectionPool} from '../sqlConnectionPool.js';
 
 import {WebSocketServer} from 'ws';
 
@@ -242,21 +243,7 @@ export async function toMCUOnMessage(
         break;
       }
       case("patch"):{
-        if(!connection)
-          return client.send(JSON.stringify({
-            __messageType: "error", error: "patch message requires authentication beforehand."
-          }));
-        const isCompositeDevice = !(await addDatapoint(
-          objectFromRequest, 
-          `${connection.getDeviceID()}_0`, 
-          sqlConnectionPool, 
-          honeycombDBConnectionPool, 
-          connection.getDeviceID())
-        );
-        if(isCompositeDevice)
-          return clientWebSocket.send(JSON.stringify({
-            __messageType: "error", error: "Cannot add datapoint to composite device."})
-          );
+        await handlePatchMessage(objectFromRequest, connection, clientWebSocket);
         break;
       }
       default:
@@ -334,4 +321,43 @@ async function handleAuthMessage(
   return clientWebSocket.send(JSON.stringify({
     __messageType: "auth", success: acceptedAuth
   }));   
+}
+
+async function handlePatchMessage(objectFromRequest, connection, clientWebSocket){
+  /*
+    Handles messages with __messageType: "patch".
+    May raise undocumented exceptions.
+
+    Input:
+    {
+      __messageType: "patch",
+      <datapoint column name>: <JSON value>,
+      ...
+    }
+    The keys after __messageType are matched against the authenticated
+    device's table columns. Missing or null columns and unknown keys are
+    ignored. Each matching non-null key is inserted as a new datapoint row.
+
+    Writes to connection:
+    - {__messageType: "error", error: string}: unauthenticated patch or a
+      patch targeting a composite device.
+
+    Returns nothing after a successful patch.
+  */
+  if(!connection)
+    return clientWebSocket.send(JSON.stringify({
+      __messageType: "error", error: "patch message requires authentication beforehand."
+    }));
+
+  const deviceID = connection.getDeviceID();
+  const isCompositeDevice = !(await addDatapointLogic(
+    objectFromRequest,
+    getDeviceTableNameFromID(deviceID),
+    sqlConnectionPool,
+    deviceID
+  ));
+  if(isCompositeDevice)
+    return clientWebSocket.send(JSON.stringify({
+      __messageType: "error", error: "Cannot add datapoint to composite device."
+    }));
 }

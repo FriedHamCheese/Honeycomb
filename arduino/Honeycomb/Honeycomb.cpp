@@ -12,7 +12,6 @@ HoneycombClient::HoneycombClient(
 : variablesFromServer(nullptr),
   wifiClient(),
   webSocketConnection(wifiClient, serverURL, serverPort),
-  httpConnection(wifiClient, serverURL, serverPort),
   deviceSecret(deviceSecret),
   deviceID(deviceID),
   millisLastServerMessage(millis()),
@@ -21,7 +20,6 @@ HoneycombClient::HoneycombClient(
   connected(false),
   authenticated(false)
 {
-  snprintf(this->patchDatapointURL, this->patchDatapointURLLength, "/apiv1/device/%llu/datapoint", deviceID);
 }
 
 int HoneycombClient::begin(){
@@ -139,38 +137,31 @@ HoneycombError HoneycombClient::readIncomingMessages(){
   return HoneycombError::unknownReceivedMessageType;
 }
 
-HoneycombError HoneycombClient::patchDatapoint(JsonObjectConst jsonRef){  
+HoneycombError HoneycombClient::patchDatapoint(JsonObject jsonRef){
+  if(not (this->connected)) return HoneycombError::disconnectedWebSocket;
+  if(not (this->authenticated)) return HoneycombError::invalidAuthenticateRequest;
+
+  jsonRef["__messageType"] = "patch";
   const size_t stringifiedJSONBytes = serializeJson(jsonRef, this->scratchpadBuffer, this->scratchpadBufferBytes);
   const bool noEndingNullTerminator = stringifiedJSONBytes >= this->scratchpadBufferBytes;
   if(noEndingNullTerminator) return HoneycombError::noMemory;
   
-  this->httpConnection.beginRequest();
-  const int httpSendingError = this->httpConnection.post(this->patchDatapointURL);
-  if(httpSendingError){
-    this->httpConnection.endRequest();
-    return httpErrorToHoneycombError(httpSendingError);
+  const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT) != 0;
+  if(beginMessageError){
+    this->connected = false;
+    this->authenticated = false;
+    return HoneycombError::outboundMessageSend;
   }
   
-  constexpr uint8_t u16MaxStrLength = 6;
-  char contentLengthStr[u16MaxStrLength];
-  snprintf(contentLengthStr, u16MaxStrLength, "%hu", stringifiedJSONBytes);
-  
-  this->httpConnection.sendHeader("Authorization", this->deviceSecret);
-  this->httpConnection.sendHeader("Content-type: application/json");
-  this->httpConnection.sendHeader("Content-Length", contentLengthStr);
-  this->httpConnection.beginBody();
-  this->httpConnection.write((uint8_t*)(this->scratchpadBuffer), stringifiedJSONBytes);
-  this->httpConnection.endRequest();
-  
-  const int responseCode = this->httpConnection.responseStatusCode();
-  constexpr int httpCodeForCreated = 201;
-  if(responseCode == httpCodeForCreated)
-    return HoneycombError::ok;
-  switch(responseCode){
-    case 400: return HoneycombError::httpInvalidRequest;
-    case 401: return HoneycombError::invalidAuthenticateRequest;
-    default: return HoneycombError::unknown;
+  this->webSocketConnection.write((uint8_t*)(this->scratchpadBuffer), stringifiedJSONBytes);
+  const bool endMessageError = this->webSocketConnection.endMessage() != 0;
+  if(endMessageError){
+    this->connected = false;
+    this->authenticated = false;
+    return HoneycombError::outboundMessageSend;
   }
+
+  return HoneycombError::ok;
 }
 
 HoneycombError deserializationErrorToHoneycombError(const DeserializationError error){

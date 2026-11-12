@@ -67,6 +67,96 @@ async function testWebSocketRouterToMCU(){
     }
   }
 
+  async function testPatchRequiresAuthentication(){
+    const socket = new WebSocket(ENDPOINT_URL);
+    const abortAsync = new AbortController();
+    let testPassed = false;
+
+    socket.addEventListener('open', function(){
+      socket.send(JSON.stringify({
+        __messageType: "patch",
+        temperature_celsius: 27.0,
+        relative_humidity_percent: 80.0,
+      }));
+    }, {signal: abortAsync.signal});
+    socket.addEventListener('message', function(event){
+      const objectFromMessage = JSON.parse(event.data);
+      testPassed = objectFromMessage.__messageType === "error"
+        && objectFromMessage.error === "patch message requires authentication beforehand.";
+      abortAsync.abort();
+      socket.close();
+    }, {signal: abortAsync.signal});
+    socket.addEventListener('error', function(){
+      abortAsync.abort();
+      socket.close();
+    }, {signal: abortAsync.signal});
+
+    try{
+      await setTimeout(MAX_TIMEOUT_MS, 'result', {signal: abortAsync.signal});
+      console.log(
+        "testWebSocketRouterToMCU(): testPatchRequiresAuthentication(): Failed: timed out."
+      );
+      return false;
+    }catch(err){
+      console.log(testPassed
+        ? "testWebSocketRouterToMCU(): testPatchRequiresAuthentication(): OK"
+        : "testWebSocketRouterToMCU(): testPatchRequiresAuthentication(): Failed: unexpected response."
+      );
+      return testPassed;
+    }
+  }
+
+  async function testAuthenticatedPatch(){
+    const socket = new WebSocket(ENDPOINT_URL);
+    const abortAsync = new AbortController();
+    let patchSent = false;
+    let socketError = false;
+
+    socket.addEventListener('open', function(){
+      socket.send(JSON.stringify({
+        __messageType: "auth",
+        deviceID: 3,
+        deviceSecret: "AkJir9WCYsd%zrHyJPr4xr8m"
+      }));
+      setTimeout(100, 'result', {signal: abortAsync.signal}).then(function(){
+        socket.send(JSON.stringify({
+          __messageType: "patch",
+          temperature_celsius: 31.25,
+          relative_humidity_percent: 83.75,
+          epoch_seconds: 987654.0
+        }));
+        patchSent = true;
+      }, function(){});
+    }, {signal: abortAsync.signal});
+    socket.addEventListener('message', function(event){
+      if((typeof event.data) !== "string"){
+        socketError = true;
+        return;
+      }
+      const objectFromMessage = JSON.parse(event.data);
+      socketError = socketError || objectFromMessage.__messageType === "error";
+    }, {signal: abortAsync.signal});
+    socket.addEventListener('error', function(){
+      socketError = true;
+      abortAsync.abort();
+      socket.close();
+    }, {signal: abortAsync.signal});
+
+    try{
+      await setTimeout(500, 'result', {signal: abortAsync.signal});
+    }catch(err){
+    }
+    abortAsync.abort();
+    socket.close();
+
+    const testPassed = patchSent && !socketError;
+    console.log(testPassed
+      ? "testWebSocketRouterToMCU(): testAuthenticatedPatch(): OK"
+      : "testWebSocketRouterToMCU(): testAuthenticatedPatch(): Failed: patch was rejected."
+    );
+    return testPassed;
+  }
+
   async function testCompetingForStaleAuths(){        
     try{
       const firstAuthSocket = new WebSocket(ENDPOINT_URL);
@@ -199,8 +289,8 @@ async function testWebSocketRouterToMCU(){
   
   testConnect();
   testAuth();
-  const MS_BETWEEN_AUTH_UNAUTH = 500;
-  await setTimeout(MS_BETWEEN_AUTH_UNAUTH, 'result');
+  await testPatchRequiresAuthentication();
+  await testAuthenticatedPatch();
   await testCompetingForStaleAuths();
 }
 
