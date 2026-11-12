@@ -13,21 +13,21 @@ import {randomBytes} from 'node:crypto';
 const MIN_COLUMN_NAME_CHARACTERS = 1;
 const MAX_COLUMN_NAME_CHARACTERS = 32;  
 
-export async function registerDevice(
-  honeycombDBConnection,
+export async function registerDeviceLogic({
+  sqlConnection,
   deviceSecret,
   viewingSecret,
   deviceName,
   isCompositeDevice,
   ownerUserID,
-){
+}){
   const SALT_SIZE_BYTES = 16;
   const salt = randomBytes(SALT_SIZE_BYTES).toString('hex');
   const storingDeviceSecret = saltAndRehash(deviceSecret, salt);
   const saltedViewingSecret = saltAndRehash(viewingSecret, salt);
   
-  const [insertionResult] = await honeycombDBConnection.execute(
-    "INSERT INTO Device (saltedDeviceSecret, saltedViewingSecret, deviceSecretSalt, deviceName, isCompositeDevice, ownerUserID) VALUES (?,?,?,?,?,?)",
+  const [insertionResult] = await sqlConnection.execute(
+    "INSERT INTO Honeycomb.Device (saltedDeviceSecret, saltedViewingSecret, deviceSecretSalt, deviceName, isCompositeDevice, ownerUserID) VALUES (?,?,?,?,?,?)",
     [storingDeviceSecret, saltedViewingSecret, salt, deviceName, isCompositeDevice, ownerUserID]
   );
   const deviceID = insertionResult.insertId;
@@ -37,7 +37,7 @@ export async function registerDevice(
 export async function createInitialDeviceTable(
   objectFromRequest, 
   deviceIDStr, 
-  honeycombDBConnection
+  sqlConnection
 ){
   /*
   Exceptions: exceptions from SQL command execution.
@@ -56,8 +56,8 @@ export async function createInitialDeviceTable(
   );
   
   const finalTableAttributes = "__datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT, " + sqlTableAttributes;
-  const createTableQuery = `CREATE TABLE ${getDeviceTableNameFromID(deviceIDStr)} (${finalTableAttributes});`; 
-  await honeycombDBConnection.execute(createTableQuery);
+  const createTableQuery = `CREATE TABLE Honeycomb.${getDeviceTableNameFromID(deviceIDStr)} (${finalTableAttributes});`; 
+  await sqlConnection.execute(createTableQuery);
   return warnings;
 }
 
@@ -91,15 +91,14 @@ export async function deleteDevice(
   honeycombDBConnectionPool.releaseConnection(honeycombDBConnection);
 }
 
-export async function addDatapoint(
+export async function addDatapointLogic(
   objectFromResponse, 
   tableName, 
   sqlConnectionPool, 
-  honeycombDBConnectionPool,
   deviceID,
 ){  
-  const [deviceQuery] = await honeycombDBConnectionPool.execute(
-    "SELECT isCompositeDevice FROM Device WHERE deviceID = ?", [deviceID]
+  const [deviceQuery] = await sqlConnectionPool.execute(
+    "SELECT isCompositeDevice FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
   );
   const cannotAddToSQLView = deviceQuery[0].isCompositeDevice;
   if(cannotAddToSQLView) return false;
@@ -123,9 +122,9 @@ export async function addDatapoint(
   const FIRST_ELEMENT = 0;
   const joinedColumnNames = columns.join(',');
   const valuePositions = Array(columns.length).fill('?', FIRST_ELEMENT);
-  const sqlQuery = `INSERT INTO ${tableName} (${joinedColumnNames}) VALUES (${valuePositions.join(',')})`;
+  const sqlQuery = `INSERT INTO Honeycomb.${tableName} (${joinedColumnNames}) VALUES (${valuePositions.join(',')})`;
   
-  await honeycombDBConnectionPool.execute(
+  await sqlConnectionPool.execute(
     sqlQuery,
     correspondingValues
   );
