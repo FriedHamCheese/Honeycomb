@@ -26,7 +26,7 @@ HoneycombClient::HoneycombClient(
 
 int HoneycombClient::begin(){
   this->authenticated = false;
-  const int connectionBeginError = this->webSocketConnection.begin("/toDevice");
+  const int connectionBeginError = this->webSocketConnection.begin("/websocketapiv1");
   if(!connectionBeginError){
     this->connected = true;
     this->millisLastServerMessage = millis();

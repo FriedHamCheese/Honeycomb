@@ -2,7 +2,7 @@ import {HTTP_STATUS_FOR_OK, WEBSOCKET_MS_BEFORE_STALE} from '../constraints.js';
 import {setTimeout} from 'node:timers/promises';
 
 async function testWebSocketRouterToMCU(){
-  const ENDPOINT_URL = "http://localhost:5001/toDevice";
+  const ENDPOINT_URL = "http://localhost:5001/websocketapiv1";
   const MAX_TIMEOUT_MS = 5000;
 
   function testConnect(){

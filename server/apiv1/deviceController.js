@@ -255,7 +255,7 @@ export async function getDevice(request, response){
     const QUERY_RESULT = 0;
     if(tableResult.length !== 0){
       webSocketRouterToMCU.putToDevice(JSON.stringify({
-          __messageType: "patch", ...(tableResult.at(-1))
+          __messageType: "patch", ...(tableResult[0].at(-1))
         }), 
         request.deviceIDInt
       );

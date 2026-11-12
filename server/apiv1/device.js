@@ -38,8 +38,6 @@ import {
   HTTP_STATUS_FOR_SERVER_ERROR,
 } from '../../constraints.js';
 
-import {webSocketRouterToMCU} from './webSockets.js';
-
 import express from "express";
 export const deviceRouter = express.Router();
 
