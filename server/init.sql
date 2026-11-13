@@ -24,8 +24,8 @@ CREATE TABLE Device(
 );
 
 CREATE TABLE DashboardWidget(
-  id INT(64) PRIMARY KEY AUTO_INCREMENT,
   deviceID INT(64) NOT NULL REFERENCES Device(deviceID),
+  widgetId INT UNSIGNED NOT NULL,
   widgetType INT(8) NOT NULL,
   columnName VARCHAR(32) NOT NULL,
   /*
@@ -34,7 +34,9 @@ CREATE TABLE DashboardWidget(
   xpos_quarters INT(2) NOT NULL,
   ypos_quarters INT(3) NOT NULL,
   width_quarters INT(2) NOT NULL,
-  height_quarters INT(3) NOT NULL
+  height_quarters INT(3) NOT NULL,
+  
+  PRIMARY KEY (deviceID, widgetId)
 );
 
 COMMIT;

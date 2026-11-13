@@ -1,4 +1,8 @@
 import styles from './DashboardWidgets.module.css';
+import {
+  DASHBOARD_FRAME_WIDTH_QUARTERS,
+  DASHBOARD_FRAME_HEIGHT_QUARTERS,
+} from '../../constraints.js';
 
 function DashboardReading({widget, latestDatapoint}){
   const value = latestDatapoint?.[widget.columnName];
@@ -12,10 +16,10 @@ function DashboardReading({widget, latestDatapoint}){
     <div
       className={styles.dashboardReading}
       style={{
-        left: `${widget.xpos_quarters * 25}%`,
-        top: `${widget.ypos_quarters * 25}%`,
-        width: `${widget.width_quarters * 25}%`,
-        height: `${widget.height_quarters * 25}%`,
+        left: `${widget.xpos_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
+        top: `${widget.ypos_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
+        width: `${widget.width_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
+        height: `${widget.height_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
       }}
     >
       <span className={styles.dashboardLabel}>{widget.columnName}</span>
@@ -29,6 +33,6 @@ export default function DashboardWidgets({widgets, latestDatapoint}){
 
   return widgets.map((widget) => {
     if(!(widget instanceof Object) || widget.widgetType !== 0) return null;
-    return <DashboardReading key={widget.id} widget={widget} latestDatapoint={latestDatapoint}/>;
+    return <DashboardReading key={widget.widgetId} widget={widget} latestDatapoint={latestDatapoint}/>;
   });
 }

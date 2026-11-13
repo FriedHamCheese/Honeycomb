@@ -4,7 +4,10 @@ import {
   deviceIDParameterValid,
   checkCachedLoginIsDeviceOwnerMiddleware,
 } from '../auth.js';
-import {getDashboardWidgets} from './dashboardController.js';
+
+import {sqlConnectionPool} from '../sqlConnectionPool.js'
+
+import {getDashboardWidgets, postDashboardWidgets} from './dashboardController.js';
 
 export const dashboardRouter = express.Router();
 
@@ -31,5 +34,31 @@ dashboardRouter.get(
   '/:deviceID',
   deviceIDParameterValid,
   checkCachedLoginIsDeviceOwnerMiddleware,
-  getDashboardWidgets
+  async function (request, response){getDashboardWidgets(request, response, sqlConnectionPool);},
+);
+
+dashboardRouter.post(
+  /*
+  Input:
+  - Authorization: user session token
+  - {
+    widgets: [
+      {
+        widgetId: unsigned 32-bit integer,
+        widgetType: int, 0-255,
+        columnName: str(1-32),
+        xpos_quarters: int, 0-3,
+        ypos_quarters: int, 0-7,
+        width_quarters: int, 0-3,
+        height_quarters: int, 0-7
+      },
+      ...
+    ]
+  }
+  Returns:
+  */
+  "/:deviceID",
+  deviceIDParameterValid,
+  checkCachedLoginIsDeviceOwnerMiddleware,
+  async function (request, response){postDashboardWidgets(request, response, sqlConnectionPool);},
 );
