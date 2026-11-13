@@ -115,26 +115,7 @@
   border: 1px solid #E2E2E2;
   border-radius: 8px;
   background-color: #FCFCFC;
-}
-
-.dashboardReading{
-  min-width: 160px;
-  border: 1px solid #E8E8E8;
-  border-radius: 5px;
-  padding: 12px 14px;
-  font-family: Arial;
-}
-
-.dashboardLabel{
-  display: block;
-  color: #777777;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.dashboardValue{
-  color: #222222;
-  font-size: 20px;
+  position: relative;
 }
 
 .deviceName{

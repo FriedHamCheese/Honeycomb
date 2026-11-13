@@ -1,3 +1,7 @@
+import {
+  MAX_TYPE_CHARACTERS,
+} from '../constraints.js';
+
 function sizedTypeToSQLType(typename){
   /*
   input:
@@ -57,8 +61,6 @@ export function parseBodyToSQLTableAttributes(objectFromBody, minColumnNameChara
   let warnings = "";
   let sqlTableAttributes = "";
   const INCLUDING_FIRST_CHARACTER = 0;
-  const MAX_TYPE_CHARACTERS = 16;
-
   for(const [columnName, typeName] of Object.entries(objectFromBody))
   {
     if((typeof typeName) !== "string"){

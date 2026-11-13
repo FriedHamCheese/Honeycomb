@@ -20,6 +20,9 @@ export const MAX_DEVICE_VIEWING_SECRET_CHARACTERS = 32;
 
 export const MAX_DEVICE_ID_CHARACTERS = 16;
 
+export const MAX_COLUMN_NAME_CHARACTERS = 32;
+export const MAX_TYPE_CHARACTERS = 16;
+
 export const HEX_PER_BYTE = 2;
 
 export const GENERATED_USER_RAW_SALT_BYTES = 16;

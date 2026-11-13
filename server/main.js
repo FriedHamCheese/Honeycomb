@@ -1,5 +1,6 @@
 import {deviceRouter} from './apiv1/device.js';
 import {userRouter} from './apiv1/user.js';
+import {dashboardRouter} from './apiv1/dashboard.js';
 import {
   webSocketRouterToMCU,
   toMCUOnMessage,
@@ -22,6 +23,7 @@ const apiRouter = express.Router();
 
 apiRouter.use("/device", deviceRouter);
 apiRouter.use("/user", userRouter);
+apiRouter.use("/dashboard", dashboardRouter);
 app.use("/apiv1", apiRouter);
 
 const httpServer = http.createServer(app);

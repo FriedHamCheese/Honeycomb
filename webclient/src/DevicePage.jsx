@@ -5,6 +5,7 @@ import {useState, useEffect, useMemo} from 'react';
 import {useNavigate, useParams} from 'react-router';
 
 import styles from './DevicePage.module.css';
+import DashboardWidgets from './DashboardWidgets.jsx';
 
 export default function DevicePage({
   APIBaseURL, URLToLoginPage, getUserSessionToken, clearUserSessionToken
@@ -17,6 +18,7 @@ export default function DevicePage({
   const [deviceDataLabels, setDeviceDataLabels] = useState([]);
   const [deviceRows, setDeviceRows] = useState([]);
   const [latestDatapoint, setLatestDatapoint] = useState();
+  const [dashboardWidgets, setDashboardWidgets] = useState([]);
   const [refreshObject, setRefreshObject] = useState({});
   const [activeTab, setActiveTab] = useState('dataLog');
   const navigate = useNavigate();
@@ -147,6 +149,48 @@ export default function DevicePage({
       clearInterval(timerID);
     };
   }, [activeTab, APIBaseURL, URLToLoginPage, getUserSessionToken, linkParameters.deviceIDStr, navigate]);
+
+  useEffect(() => {
+    if(activeTab !== 'dashboard') return;
+
+    let cancelled = false;
+    async function getDashboardWidgets(){
+      let response;
+      try{
+        response = await fetch(`${APIBaseURL}/apiv1/dashboard/${linkParameters.deviceIDStr}`, {
+          headers: {authorization: getUserSessionToken()}
+        });
+      }catch(err){
+        if(cancelled) return;
+        if(err instanceof TypeError)
+          return setErrorMessage("Couldn't connect to server.");
+        return setErrorMessage(String(err));
+      }
+
+      if(response.status === 401){
+        navigate(URLToLoginPage);
+        return;
+      }
+      if(!response.ok)
+        return setErrorMessage(`Received HTTP status ${response.status} from server.`);
+
+      try{
+        const objectFromResponse = await response.json();
+        if(!(objectFromResponse.widgets instanceof Array))
+          return setErrorMessage("Server response .widgets attribute not Array.");
+        if(!cancelled) setDashboardWidgets(objectFromResponse.widgets);
+      }catch(err){
+        if(cancelled) return;
+        if(err instanceof TypeError)
+          return setErrorMessage("Could not read response.");
+        if(err instanceof SyntaxError)
+          return setErrorMessage("Cannot parse response as JSON.");
+        return setErrorMessage(String(err));
+      }
+    }
+
+    getDashboardWidgets();
+  }, [activeTab, APIBaseURL, URLToLoginPage, getUserSessionToken, linkParameters.deviceIDStr, navigate]);
   
   useEffect(() => {
     if(!deviceObject) return;
@@ -212,26 +256,7 @@ export default function DevicePage({
             <div className={`${styles.tabPanel} ${activeTab === 'dashboard' ? styles.dashboardPanel : ''}`}>
               {activeTab === 'dashboard' ? <div className={styles.dashboardTabContent}>
                 <div className={styles.dashboardFrame}>
-                  <div className={styles.dashboard}>
-                    <div className={styles.dashboardReading}>
-                      <span className={styles.dashboardLabel}>Temperature</span>
-                      <span className={styles.dashboardValue}>
-                        {latestDatapoint?.temperature_celsius ?? '—'}
-                        {latestDatapoint?.temperature_celsius !== undefined ? ' °C' : ''}
-                      </span>
-                    </div>
-                    <div className={styles.dashboardReading}>
-                      <span className={styles.dashboardLabel}>Relative humidity</span>
-                      <span className={styles.dashboardValue}>
-                        {latestDatapoint?.relative_humidity_percent ?? '—'}
-                        {latestDatapoint?.relative_humidity_percent !== undefined ? ' %' : ''}
-                      </span>
-                    </div>
-                    <div className={styles.dashboardReading}>
-                      <span className={styles.dashboardLabel}>Epoch seconds</span>
-                      <span className={styles.dashboardValue}>{latestDatapoint?.epoch_seconds ?? '—'}</span>
-                    </div>
-                  </div>
+                  <DashboardWidgets widgets={dashboardWidgets} latestDatapoint={latestDatapoint}/>
                 </div>
               </div> : activeTab === 'dataLog' ? <>
                 <table className={styles.dataTable}>

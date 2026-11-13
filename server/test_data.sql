@@ -88,4 +88,11 @@ CREATE TABLE Device3_Table(
   notes VARCHAR(32)
 );
 
+INSERT INTO DashboardWidget(deviceID, widgetType, columnName, xpos_quarters, ypos_quarters, width_quarters, height_quarters)
+  VALUES (1, 0, "temperature_celsius", 0, 0, 2, 1);
+INSERT INTO DashboardWidget(deviceID, widgetType, columnName, xpos_quarters, ypos_quarters, width_quarters, height_quarters)
+  VALUES (1, 0, "relative_humidity_percent", 2, 0, 2, 1);
+INSERT INTO DashboardWidget(deviceID, widgetType, columnName, xpos_quarters, ypos_quarters, width_quarters, height_quarters)
+  VALUES (1, 0, "epoch_seconds", 0, 1, 4, 1);
+
 COMMIT;

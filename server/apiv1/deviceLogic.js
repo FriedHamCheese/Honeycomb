@@ -9,9 +9,9 @@ import {
 } from '../auth.js';
 
 import {randomBytes} from 'node:crypto';
+import {MAX_COLUMN_NAME_CHARACTERS} from '../../constraints.js';
 
 const MIN_COLUMN_NAME_CHARACTERS = 1;
-const MAX_COLUMN_NAME_CHARACTERS = 32;  
 
 export async function registerDeviceLogic({
   sqlConnection,
