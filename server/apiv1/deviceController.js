@@ -270,6 +270,20 @@ export async function getDevice(request, response){
   }
 }
 
+export async function getLatestDatapoint(request, response){
+  try{
+    const [latestDatapoint] = await honeycombDBConnectionPool.execute(
+      `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}
+       ORDER BY __datapointIndex DESC LIMIT 1`
+    );
+
+    response.send({datapoint: latestDatapoint[0] || null});
+  }catch(err){
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
+    throw err;
+  }
+}
+
 export async function deleteDevice(request, response){
   try{
     //exceptions from SQL command execution.

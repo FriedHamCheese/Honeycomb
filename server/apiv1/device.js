@@ -9,6 +9,7 @@ import {
   deleteDevice,
   addDatapoint,
   getDevice,
+  getLatestDatapoint,
 } from './deviceController.js';
 
 import {
@@ -58,6 +59,13 @@ deviceRouter.post(
   "/compositeDevice",
   checkCachedLoginMiddleware,
   async (request, response) => {registerCompositeDevice(request, response, sqlConnectionPool, registerDeviceLogic);}
+);
+
+deviceRouter.get(
+  "/:deviceID/latest",
+  deviceIDParameterValid,
+  checkCachedLoginMiddleware,
+  async (request, response) => {getLatestDatapoint(request, response);}
 );
 
 deviceRouter.get(

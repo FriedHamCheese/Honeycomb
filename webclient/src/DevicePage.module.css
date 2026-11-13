@@ -2,7 +2,7 @@
   position: absolute;
   top: 0px;
   left: 0px;
-  width: 100vw;
+  right: 0px;
   height: 78px;
   border-bottom: 2px solid #EEEEEE;
   z-index: -1;
@@ -24,13 +24,16 @@
   position: absolute;
   left: 80px;
   top: 80px;
+  right: 0px;
+  bottom: 0px;
   z-index: -2;
   margin: 0px;
+  box-sizing: border-box;
   padding-left: 20px;
   padding-top: 20px;
-  overflow-y: auto;
-  overflow-x: auto;
-  width: 85vw;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .tabs{
@@ -39,6 +42,19 @@
   gap: 4px;
   border-bottom: 2px solid #EEEEEE;
   margin-bottom: 20px;
+}
+
+.tabPanel{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 20px;
+  padding-bottom: 20px;
+}
+
+.dashboardPanel{
+  overflow: hidden;
+  padding-bottom: 0px;
 }
 
 .tab{
@@ -74,6 +90,51 @@
   color: #999999;
   font-family: Arial;
   padding: 20px 0px;
+}
+
+.dashboard{
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashboardTabContent{
+  height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 20px;
+}
+
+.dashboardFrame{
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  margin: 0px auto;
+  aspect-ratio: 9 / 16;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid #E2E2E2;
+  border-radius: 8px;
+  background-color: #FCFCFC;
+}
+
+.dashboardReading{
+  min-width: 160px;
+  border: 1px solid #E8E8E8;
+  border-radius: 5px;
+  padding: 12px 14px;
+  font-family: Arial;
+}
+
+.dashboardLabel{
+  display: block;
+  color: #777777;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.dashboardValue{
+  color: #222222;
+  font-size: 20px;
 }
 
 .deviceName{

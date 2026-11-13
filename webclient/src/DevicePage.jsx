@@ -16,6 +16,7 @@ export default function DevicePage({
   
   const [deviceDataLabels, setDeviceDataLabels] = useState([]);
   const [deviceRows, setDeviceRows] = useState([]);
+  const [latestDatapoint, setLatestDatapoint] = useState();
   const [refreshObject, setRefreshObject] = useState({});
   const [activeTab, setActiveTab] = useState('dataLog');
   const navigate = useNavigate();
@@ -95,6 +96,57 @@ export default function DevicePage({
 
     return function (){clearTimeout(timerID);}
   }, [refreshObject]);
+
+  useEffect(() => {
+    if(activeTab !== 'dashboard') return;
+
+    let cancelled = false;
+    async function getLatestDatapoint(){
+      let response;
+      try{
+        response = await fetch(`${APIBaseURL}/apiv1/device/${linkParameters.deviceIDStr}/latest`, {
+          headers: {authorization: getUserSessionToken()}
+        });
+      }catch(err){
+        if(cancelled) return;
+        if(err instanceof TypeError)
+          return setErrorMessage("Couldn't connect to server.");
+        return setErrorMessage(String(err));
+      }
+
+      if(response.status === 401){
+        navigate(URLToLoginPage);
+        return;
+      }
+      if(!response.ok){
+        return setErrorMessage(`Received HTTP status ${response.status} from server.`);
+      }
+
+      try{
+        const objectFromResponse = await response.json();
+        if(!(objectFromResponse.datapoint === null || objectFromResponse.datapoint instanceof Object))
+          return setErrorMessage("Server response .datapoint not Object or null.");
+        if(!cancelled){
+          setLatestDatapoint(objectFromResponse.datapoint);
+          setErrorMessage("");
+        }
+      }catch(err){
+        if(cancelled) return;
+        if(err instanceof TypeError)
+          return setErrorMessage("Could not read response.");
+        if(err instanceof SyntaxError)
+          return setErrorMessage("Cannot parse response as JSON.");
+        return setErrorMessage(String(err));
+      }
+    }
+
+    getLatestDatapoint();
+    const timerID = setInterval(getLatestDatapoint, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timerID);
+    };
+  }, [activeTab, APIBaseURL, URLToLoginPage, getUserSessionToken, linkParameters.deviceIDStr, navigate]);
   
   useEffect(() => {
     if(!deviceObject) return;
@@ -157,18 +209,43 @@ export default function DevicePage({
               </button>
             </div>
 
-            {activeTab === 'dataLog' ? <>
-              <table className={styles.dataTable}>
-                <thead>
-                  <tr className={styles.tableHeaderRow}>
-                    {deviceDataLabels.map((dataLabel) => <th key={dataLabel} className={styles.tableHeader}>{dataLabel}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {DatapointsVisual}
-                </tbody>
-              </table>
-            </> : <div className={styles.emptyTab}></div>}
+            <div className={`${styles.tabPanel} ${activeTab === 'dashboard' ? styles.dashboardPanel : ''}`}>
+              {activeTab === 'dashboard' ? <div className={styles.dashboardTabContent}>
+                <div className={styles.dashboardFrame}>
+                  <div className={styles.dashboard}>
+                    <div className={styles.dashboardReading}>
+                      <span className={styles.dashboardLabel}>Temperature</span>
+                      <span className={styles.dashboardValue}>
+                        {latestDatapoint?.temperature_celsius ?? '—'}
+                        {latestDatapoint?.temperature_celsius !== undefined ? ' °C' : ''}
+                      </span>
+                    </div>
+                    <div className={styles.dashboardReading}>
+                      <span className={styles.dashboardLabel}>Relative humidity</span>
+                      <span className={styles.dashboardValue}>
+                        {latestDatapoint?.relative_humidity_percent ?? '—'}
+                        {latestDatapoint?.relative_humidity_percent !== undefined ? ' %' : ''}
+                      </span>
+                    </div>
+                    <div className={styles.dashboardReading}>
+                      <span className={styles.dashboardLabel}>Epoch seconds</span>
+                      <span className={styles.dashboardValue}>{latestDatapoint?.epoch_seconds ?? '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div> : activeTab === 'dataLog' ? <>
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr className={styles.tableHeaderRow}>
+                      {deviceDataLabels.map((dataLabel) => <th key={dataLabel} className={styles.tableHeader}>{dataLabel}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DatapointsVisual}
+                  </tbody>
+                </table>
+              </> : <div className={styles.emptyTab}></div>}
+            </div>
           </div>
         </div>
       }
