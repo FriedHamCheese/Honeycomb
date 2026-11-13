@@ -27,9 +27,53 @@
   z-index: -2;
   margin: 0px;
   padding-left: 20px;
+  padding-top: 20px;
   overflow-y: auto;
   overflow-x: auto;
   width: 85vw;
+}
+
+.tabs{
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 2px solid #EEEEEE;
+  margin-bottom: 20px;
+}
+
+.tab{
+  border: 1px solid #EEEEEE;
+  border-bottom: 0px;
+  border-radius: 6px 6px 0px 0px;
+  background-color: #FAFAFA;
+  color: #777777;
+  cursor: pointer;
+  font-family: Arial;
+  font-size: 15px;
+  padding: 10px 18px;
+}
+
+.tab:hover{
+  color: #333333;
+  background-color: #FFF8D9;
+}
+
+.activeTab{
+  background-color: #FFC90E;
+  border-color: #FFC90E;
+  color: #FFFFFF;
+  font-weight: bold;
+}
+
+.activeTab:hover{
+  background-color: #FFC90E;
+  color: #FFFFFF;
+}
+
+.emptyTab{
+  color: #999999;
+  font-family: Arial;
+  padding: 20px 0px;
 }
 
 .deviceName{
@@ -59,20 +103,46 @@
   color: white;
 }
 
-.deviceDataHeader{
-  font-family: Arial;
-  color: #FFC90E;
-}
-
 .table{
   margin: 0px;
-  padding: 10px;
+  padding: 9px 12px;
   border: 1px solid #EEEEEE;
   font-family: Arial;
-  border-spacing: 0px;
+  color: #222222;
+  text-align: left;
 }
 
 .tableRow{
   margin: 0px;
   padding: 0px;
+}
+
+.dataTable{
+  border-spacing: 0px;
+  border-collapse: separate;
+  border: 1px solid #E8E8E8;
+  border-radius: 5px;
+  overflow: hidden;
+  font-family: Arial;
+}
+
+.tableHeaderRow{
+  background-color: #F7F7F7;
+}
+
+.tableHeader{
+  padding: 9px 12px;
+  border: 1px solid #E8E8E8;
+  color: #333333;
+  font-family: Arial;
+  font-weight: bold;
+  text-align: left;
+}
+
+.tableRow:nth-child(even){
+  background-color: #FCFCFC;
+}
+
+.tableRow:hover{
+  background-color: #FFF9DF;
 }

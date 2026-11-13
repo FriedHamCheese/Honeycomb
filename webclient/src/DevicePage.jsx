@@ -17,12 +17,13 @@ export default function DevicePage({
   const [deviceDataLabels, setDeviceDataLabels] = useState([]);
   const [deviceRows, setDeviceRows] = useState([]);
   const [refreshObject, setRefreshObject] = useState({});
+  const [activeTab, setActiveTab] = useState('dataLog');
   const navigate = useNavigate();
   
   function DatapointContainer({datapoint}){
     return(
       <tr className={styles.tableRow}>
-        {datapoint.map((dataElement) => <td className={styles.table}>{dataElement}</td>)}
+        {datapoint.map((dataElement, index) => <td key={index} className={styles.table}>{dataElement}</td>)}
       </tr>
     );
   }
@@ -126,17 +127,48 @@ export default function DevicePage({
             <p className={styles.deviceID}>device ID: {linkParameters.deviceIDStr}</p>
           </div>
           <div className={styles.canvas}>
-            <h2 className={styles.deviceDataHeader}>Device Data</h2>
-            <table style={{borderSpacing: 0}}>
-              <thead>
-                <tr className={styles.tableRow}>
-                  {deviceDataLabels.map((dataLabel) => <th className={styles.table}>{dataLabel}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {DatapointsVisual}
-              </tbody>
-            </table>
+            <div className={styles.tabs} role="tablist" aria-label="Device views">
+              <button
+                className={`${styles.tab} ${activeTab === 'dashboard' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+                role="tab"
+                aria-selected={activeTab === 'dashboard'}
+                type="button"
+              >
+                Dashboard
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'dataLog' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('dataLog')}
+                role="tab"
+                aria-selected={activeTab === 'dataLog'}
+                type="button"
+              >
+                Data Log
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'settings' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('settings')}
+                role="tab"
+                aria-selected={activeTab === 'settings'}
+                type="button"
+              >
+                Settings
+              </button>
+            </div>
+
+            {activeTab === 'dataLog' ? <>
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr className={styles.tableHeaderRow}>
+                    {deviceDataLabels.map((dataLabel) => <th key={dataLabel} className={styles.tableHeader}>{dataLabel}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DatapointsVisual}
+                </tbody>
+              </table>
+            </> : <div className={styles.emptyTab}></div>}
           </div>
         </div>
       }
