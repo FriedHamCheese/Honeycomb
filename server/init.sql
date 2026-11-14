@@ -29,7 +29,7 @@ CREATE TABLE DashboardWidget(
   widgetType INT(8) NOT NULL,
   columnName VARCHAR(32) NOT NULL,
   /*
-  Using 9:16, the height is around 1.7x of width, thus needing another bit
+  Using 9:18, the height is exactly 2x the width, thus allowing a simple quarter grid
   */
   xpos_quarters INT(2) NOT NULL,
   ypos_quarters INT(3) NOT NULL,

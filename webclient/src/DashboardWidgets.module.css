@@ -8,6 +8,10 @@
   background-color: #FFFFFF;
 }
 
+.dashboardReading:hover{
+  border-color: #FFC90E;
+}
+
 .dashboardLabel{
   display: block;
   color: #777777;

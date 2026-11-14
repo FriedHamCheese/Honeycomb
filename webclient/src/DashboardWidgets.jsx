@@ -4,17 +4,17 @@ import {
   DASHBOARD_FRAME_HEIGHT_QUARTERS,
 } from '../../constraints.js';
 
-function DashboardReading({widget, latestDatapoint}){
+function Label01({widget, latestDatapoint, editing, onWidgetClick}){
   const value = latestDatapoint?.[widget.columnName];
-  if(value === undefined) return null;
-
-  const unit = widget.columnName === 'temperature_celsius'
-    ? ' °C'
-    : widget.columnName === 'relative_humidity_percent' ? ' %' : '';
+  //if(value === undefined) return null;
 
   return (
     <div
       className={styles.dashboardReading}
+      onClick={(event) => {
+        event.stopPropagation();
+        if(editing) onWidgetClick(widget);
+      }}
       style={{
         left: `${widget.xpos_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
         top: `${widget.ypos_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
@@ -23,16 +23,31 @@ function DashboardReading({widget, latestDatapoint}){
       }}
     >
       <span className={styles.dashboardLabel}>{widget.columnName}</span>
-      <span className={styles.dashboardValue}>{value}{unit}</span>
+      <span className={styles.dashboardValue}>{value ?? '-'}</span>
     </div>
   );
 }
 
-export default function DashboardWidgets({widgets, latestDatapoint}){
+export default function DashboardWidgets({widgets, latestDatapoint, editing, onWidgetClick}){
   if(!(widgets instanceof Array)) return null;
 
   return widgets.map((widget) => {
-    if(!(widget instanceof Object) || widget.widgetType !== 0) return null;
-    return <DashboardReading key={widget.widgetId} widget={widget} latestDatapoint={latestDatapoint}/>;
+    if(!(widget instanceof Object)) return null;
+
+    let renderedWidget;
+    switch(widget.widgetType){
+      case 0:
+        renderedWidget = <Label01
+          widget={widget}
+          latestDatapoint={latestDatapoint}
+          editing={editing}
+          onWidgetClick={onWidgetClick}
+        />;
+        break;
+      default:
+        renderedWidget = null;
+    }
+
+    return <span key={widget.widgetId}>{renderedWidget}</span>;
   });
 }

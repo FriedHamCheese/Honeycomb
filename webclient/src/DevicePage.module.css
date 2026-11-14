@@ -109,13 +109,198 @@
   height: 100%;
   max-width: 100%;
   margin: 0px auto;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 9 / 18;
   box-sizing: border-box;
   padding: 16px;
   border: 1px solid #E2E2E2;
   border-radius: 8px;
   background-color: #FCFCFC;
   position: relative;
+}
+
+.dashboardEditButton{
+  display: block;
+  margin: 0px;
+  border: 1px solid #E2E2E2;
+  border-radius: 5px;
+  padding: 7px 14px;
+  background-color: #FFFFFF;
+  color: #555555;
+  cursor: pointer;
+  font-family: Arial;
+}
+
+.dashboardActions{
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dashboardActionsEditing{
+  box-sizing: border-box;
+  padding-left: 206px;
+}
+
+.dashboardSaveButton{
+  border: 1px solid #FFC90E;
+  border-radius: 5px;
+  padding: 7px 14px;
+  background-color: #FFC90E;
+  color: #FFFFFF;
+  cursor: pointer;
+  font-family: Arial;
+  font-weight: bold;
+}
+
+.dashboardSaveButton:hover{
+  background-color: #E9B600;
+}
+
+.dashboardWorkspace{
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  height: calc(100% - 38px);
+}
+
+.dashboardEditor{
+  width: 190px;
+  flex: 0 0 190px;
+  align-self: flex-start;
+  box-sizing: border-box;
+  border: 1px solid #E2E2E2;
+  border-radius: 8px;
+  padding: 14px;
+  background-color: #FCFCFC;
+  font-family: Arial;
+}
+
+.dashboardModeControl{
+  align-self: center;
+}
+
+.dashboardModeButton{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #E2E2E2;
+  border-radius: 5px;
+  width: 32px;
+  height: 32px;
+  padding: 0px;
+  background-color: #FFFFFF;
+  color: #555555;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dashboardModeButton:hover{
+  border-color: #FFC90E;
+  background-color: #FFF9DF;
+}
+
+.dashboardEditorTitle{
+  margin: 0px 0px 14px;
+  color: #444444;
+  font-size: 16px;
+}
+
+.dashboardEditorTabs{
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.dashboardEditorTab{
+  flex: 1;
+  border: 1px solid #E2E2E2;
+  border-radius: 4px;
+  padding: 6px;
+  background-color: #FFFFFF;
+  color: #777777;
+  cursor: pointer;
+  font-family: Arial;
+  font-size: 12px;
+}
+
+.dashboardEditorTabSelected{
+  border-color: #FFC90E;
+  background-color: #FFF9DF;
+  color: #444444;
+  font-weight: bold;
+}
+
+.dashboardAddWidgetButton{
+  width: 100%;
+  border: 1px solid #E2E2E2;
+  border-radius: 5px;
+  padding: 9px;
+  background-color: #FFFFFF;
+  color: #444444;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dashboardAddWidgetButton:hover{
+  border-color: #FFC90E;
+  background-color: #FFF9DF;
+}
+
+.dashboardAddWidgetButtonSelected{
+  border-color: #FFC90E;
+  background-color: #FFF9DF;
+}
+
+.dashboardEditorAction{
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px solid #E2E2E2;
+  border-radius: 5px;
+  padding: 8px;
+  background-color: #FFFFFF;
+  color: #B23B3B;
+  cursor: pointer;
+  font-family: Arial;
+  text-align: left;
+}
+
+.dashboardEditorAction:hover{
+  border-color: #D88A8A;
+  background-color: #FFF3F3;
+}
+
+.dashboardEditorHint{
+  color: #888888;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dashboardEditorProperty{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0px 0px 10px;
+  color: #333333;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.dashboardEditorProperty span{
+  color: #888888;
+  font-size: 11px;
+}
+
+.dashboardEditorProperty input{
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #E2E2E2;
+  border-radius: 4px;
+  padding: 5px 6px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-family: Arial;
 }
 
 .deviceName{

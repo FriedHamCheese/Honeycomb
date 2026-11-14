@@ -1,7 +1,7 @@
 import {MainSideNavbar} from './mainSideNavbar.jsx';
 import {ErrorPopup} from './Popups.jsx';
 
-import {useState, useEffect, useMemo} from 'react';
+import {useState, useEffect, useMemo, useRef} from 'react';
 import {useNavigate, useParams} from 'react-router';
 
 import styles from './DevicePage.module.css';
@@ -255,9 +255,17 @@ export default function DevicePage({
 
             <div className={`${styles.tabPanel} ${activeTab === 'dashboard' ? styles.dashboardPanel : ''}`}>
               {activeTab === 'dashboard' ? <div className={styles.dashboardTabContent}>
-                <div className={styles.dashboardFrame}>
-                  <DashboardWidgets widgets={dashboardWidgets} latestDatapoint={latestDatapoint}/>
-                </div>
+                <DashboardWorkspace
+                  dashboardWidgets={dashboardWidgets}
+                  setDashboardWidgets={setDashboardWidgets}
+                  latestDatapoint={latestDatapoint}
+                  APIBaseURL={APIBaseURL}
+                  deviceID={linkParameters.deviceIDStr}
+                  getUserSessionToken={getUserSessionToken}
+                  URLToLoginPage={URLToLoginPage}
+                  navigate={navigate}
+                  setErrorMessage={setErrorMessage}
+                />
               </div> : activeTab === 'dataLog' ? <>
                 <table className={styles.dataTable}>
                   <thead>
@@ -276,4 +284,213 @@ export default function DevicePage({
       }
     </div>
   );
+}
+
+function DashboardWorkspace({
+  dashboardWidgets,
+  setDashboardWidgets,
+  latestDatapoint,
+  APIBaseURL,
+  deviceID,
+  getUserSessionToken,
+  URLToLoginPage,
+  navigate,
+  setErrorMessage,
+}){
+  const [dashboardEditMode, setDashboardEditMode] = useState(false);
+  const [selectedDashboardWidget, setSelectedDashboardWidget] = useState();
+  const [addingWidgetType, setAddingWidgetType] = useState();
+  const [editorTab, setEditorTab] = useState('add');
+  const dashboardFrameRef = useRef();
+
+  async function saveDashboardWidgets(){
+    let response;
+    try{
+      response = await fetch(`${APIBaseURL}/apiv1/dashboard/${deviceID}`, {
+        method: 'POST',
+        headers: {
+          authorization: getUserSessionToken(),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({widgets: dashboardWidgets}),
+      });
+    }catch(err){
+      if(err instanceof TypeError)
+        return setErrorMessage("Couldn't connect to server.");
+      return setErrorMessage(String(err));
+    }
+
+    if(response.status === 401){
+      navigate(URLToLoginPage);
+      return;
+    }
+    const invalidWidgetSettings = response.status === 400;
+    if(invalidWidgetSettings){
+      try{
+        const objectFromResponse = await response.json();
+        if(typeof objectFromResponse.error === 'string')
+          return setErrorMessage(`${objectFromResponse.error} Changes made not saved to server.`);
+        return setErrorMessage(`Server rejected the dashboard widgets.Changes made not saved to server.`);
+      }catch(err){
+        if(err instanceof TypeError)
+          return setErrorMessage("Could not read response.");
+        if(err instanceof SyntaxError)
+          return setErrorMessage("Cannot parse server response as JSON.");
+        return setErrorMessage(String(err));
+      }
+    }
+    if(!response.ok)
+      return setErrorMessage(`Received HTTP status ${response.status} from server.`);
+
+    setErrorMessage('');
+  }
+
+  return <>
+    <div className={`${styles.dashboardActions} ${dashboardEditMode ? styles.dashboardActionsEditing : ''}`}>
+      <button
+        className={styles.dashboardEditButton}
+        onClick={() => {
+          setDashboardEditMode(!dashboardEditMode);
+          setSelectedDashboardWidget();
+        }}
+        type="button"
+      >
+        {dashboardEditMode ? 'Close editor' : 'Edit'}
+      </button>
+      { 
+        dashboardEditMode &&
+        <button className={styles.dashboardSaveButton} onClick={saveDashboardWidgets} type="button">
+          Save
+        </button>
+      }
+    </div>
+    <div className={styles.dashboardWorkspace}>
+      {dashboardEditMode && <DashboardWidgetEditor
+        dashboardWidgets={dashboardWidgets}
+        setDashboardWidgets={setDashboardWidgets}
+        selectedDashboardWidget={selectedDashboardWidget}
+        setSelectedDashboardWidget={setSelectedDashboardWidget}
+        addingWidgetType={addingWidgetType}
+        setAddingWidgetType={setAddingWidgetType}
+        editorTab={editorTab}
+        setEditorTab={setEditorTab}
+      />}
+      <div
+        className={styles.dashboardFrame}
+        ref={dashboardFrameRef}
+        onClick={(event) => {
+          if(addingWidgetType === undefined || event.target !== dashboardFrameRef.current) return;
+          const frame = dashboardFrameRef.current.getBoundingClientRect();
+          const nextWidgetId = dashboardWidgets.reduce(
+            (highestId, widget) => Math.max(highestId, widget.widgetId), -1
+          ) + 1;
+          const newWidget = {
+            widgetId: nextWidgetId,
+            widgetType: addingWidgetType,
+            columnName: 'temperature_celsius',
+            xpos_quarters: Math.min(3, Math.max(0, Math.round((event.clientX - frame.left) / frame.width * 4))),
+            ypos_quarters: Math.min(7, Math.max(0, Math.round((event.clientY - frame.top) / frame.height * 8))),
+            width_quarters: 1,
+            height_quarters: 1,
+          };
+          setDashboardWidgets([...dashboardWidgets, newWidget]);
+          setSelectedDashboardWidget(newWidget);
+          setEditorTab('properties');
+          setAddingWidgetType(undefined);
+        }}
+      >
+      <DashboardWidgets
+          widgets={dashboardWidgets}
+          latestDatapoint={latestDatapoint}
+          editing={dashboardEditMode}
+        onWidgetClick={(widget) => {
+          setSelectedDashboardWidget(widget);
+          setEditorTab('properties');
+          setAddingWidgetType(undefined);
+        }}
+        />
+      </div>
+    </div>
+  </>;
+}
+
+function DashboardWidgetEditor({
+  dashboardWidgets,
+  setDashboardWidgets,
+  selectedDashboardWidget,
+  setSelectedDashboardWidget,
+  addingWidgetType,
+  setAddingWidgetType,
+  editorTab,
+  setEditorTab,
+}){
+  function updateWidget(propertyName, value){
+    const updatedWidget = {...selectedDashboardWidget, [propertyName]: value};
+    setSelectedDashboardWidget(updatedWidget);
+    setDashboardWidgets(dashboardWidgets.map((widget) => (
+      widget.widgetId === selectedDashboardWidget.widgetId ? updatedWidget : widget
+    )));
+  }
+
+  return <div className={styles.dashboardEditor}>
+    <div className={styles.dashboardEditorTabs}>
+      <button
+        className={`${styles.dashboardEditorTab} ${editorTab === 'add' ? styles.dashboardEditorTabSelected : ''}`}
+        onClick={() => {
+          setEditorTab('add');
+          setSelectedDashboardWidget();
+        }}
+        type="button"
+      >Add</button>
+      <button
+        className={`${styles.dashboardEditorTab} ${editorTab === 'properties' ? styles.dashboardEditorTabSelected : ''}`}
+        onClick={() => setEditorTab('properties')}
+        type="button"
+      >Properties</button>
+    </div>
+    {editorTab === 'properties' ? <>
+      <h3 className={styles.dashboardEditorTitle}>Widget properties</h3>
+      {selectedDashboardWidget ? <>
+        {[
+          ['widgetType', 'Type', false],
+          ['columnName', 'Column', true],
+          ['widgetId', 'Widget ID', false],
+          ['xpos_quarters', 'X position', false],
+          ['ypos_quarters', 'Y position', false],
+          ['width_quarters', 'Width', false],
+          ['height_quarters', 'Height', false],
+        ].map(([propertyName, label, isText]) => <label className={styles.dashboardEditorProperty} key={propertyName}>
+          <span>{label}</span>
+          <input
+            type={isText ? 'text' : 'number'}
+            value={selectedDashboardWidget[propertyName]}
+              readOnly={propertyName === 'widgetId'}
+            onChange={(event) => updateWidget(propertyName, isText ? event.target.value : Number(event.target.value))}
+          />
+        </label>)}
+        <button
+          className={styles.dashboardEditorAction}
+          onClick={() => {
+            setDashboardWidgets(dashboardWidgets.filter((widget) => widget.widgetId !== selectedDashboardWidget.widgetId));
+            setSelectedDashboardWidget();
+          }}
+          type="button"
+        >
+          Delete widget
+        </button>
+      </> : <p className={styles.dashboardEditorHint}>Select a widget in the frame to inspect its properties.</p>}
+    </> : <>
+      <h3 className={styles.dashboardEditorTitle}>Add widget</h3>
+      <button
+        className={`${styles.dashboardAddWidgetButton} ${addingWidgetType === 0 ? styles.dashboardAddWidgetButtonSelected : ''}`}
+        onClick={() => setAddingWidgetType(addingWidgetType === 0 ? undefined : 0)}
+        type="button"
+      >
+        Label 01
+      </button>
+      <p className={styles.dashboardEditorHint}>
+        {addingWidgetType === 0 ? 'Click an empty spot in the frame to place it.' : 'Select a widget type, then click the frame.'}
+      </p>
+    </>}
+  </div>;
 }
