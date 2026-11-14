@@ -37,9 +37,9 @@ export const secretAuthenticationError = {
   SECRET: 2,
 };
 
-export async function deviceViewingSecretAuthentication(deviceID, secret, honeycombDBConnection){  
-  const [deviceFromID] = await honeycombDBConnection.execute(
-    "SELECT saltedViewingSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
+export async function deviceViewingSecretAuthentication(deviceID, secret, sqlConnection){  
+  const [deviceFromID] = await sqlConnection.execute(
+    "SELECT saltedViewingSecret, deviceSecretSalt FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
   );
   if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   
@@ -48,9 +48,9 @@ export async function deviceViewingSecretAuthentication(deviceID, secret, honeyc
   return (matchingSaltedViewingSecret ? secretAuthenticationError.OK : secretAuthenticationError.SECRET);
 }
 
-export async function deviceSecretAndViewingSecretAuthentication(deviceID, secret, viewingSecret, honeycombDBConnection){
-  const [deviceFromID] = await honeycombDBConnection.execute(
-    "SELECT saltedViewingSecret, saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?", [deviceID]
+export async function deviceSecretAndViewingSecretAuthentication(deviceID, secret, viewingSecret, sqlConnection){
+  const [deviceFromID] = await sqlConnection.execute(
+    "SELECT saltedViewingSecret, saltedDeviceSecret, deviceSecretSalt FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
   );
   if(!deviceFromID.length) return secretAuthenticationError.DEVICEID;
   
@@ -67,6 +67,22 @@ export async function deviceSecretAndViewingSecretAuthentication(deviceID, secre
   return secretAuthenticationError.SECRET;
 }
 
+export async function deviceSecretAuthentication(deviceSecret, deviceID){
+  const trimmedDeviceSecret = deviceSecret.substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS).trim();
+  const [deviceFromID] = await honeycombDBConnectionPool.execute(
+    "SELECT saltedDeviceSecret, deviceSecretSalt FROM Device WHERE deviceID = ?",
+    [deviceID]
+  );
+  
+  const deviceIDNotRegistered = deviceFromID.length < 1;
+  if(deviceIDNotRegistered)
+    return secretAuthenticationError.DEVICEID;
+  const saltedDeviceSecret = saltAndRehash(trimmedDeviceSecret, deviceFromID[0].deviceSecretSalt);
+  if(saltedDeviceSecret !== deviceFromID[0].saltedDeviceSecret)
+    return secretAuthenticationError.SECRET;
+  
+  return secretAuthenticationError.OK;
+}
 
 export async function deviceSecretAuthenticationMiddleware(request, response, nextRouter){
   /*
