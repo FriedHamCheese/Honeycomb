@@ -3,9 +3,24 @@ import {ErrorPopup} from './Popups.jsx';
 
 import {useState, useEffect, useMemo, useRef} from 'react';
 import {useNavigate, useParams} from 'react-router';
+import {BsCheckLg} from 'react-icons/bs';
 
 import styles from './DevicePage.module.css';
-import DashboardWidgets from './DashboardWidgets.jsx';
+import DashboardWidgets, {Label01} from './DashboardWidgets.jsx';
+import {
+  DASHBOARD_FRAME_HEIGHT_QUARTERS,
+  DASHBOARD_FRAME_WIDTH_QUARTERS,
+  MAX_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS,
+  MAX_DASHBOARD_WIDGET_ID,
+  MAX_SUPPORTED_DASHBOARD_WIDGET_TYPE,
+  MIN_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS,
+  MIN_DASHBOARD_WIDGET_ID,
+  MIN_DASHBOARD_WIDGET_TYPE,
+  MIN_DASHBOARD_WIDGET_HEIGHT_QUARTERS,
+  MIN_DASHBOARD_WIDGET_WIDTH_QUARTERS,
+  MIN_DASHBOARD_WIDGET_X_POSITION_QUARTERS,
+  MIN_DASHBOARD_WIDGET_Y_POSITION_QUARTERS,
+} from '../../constraints.js';
 
 export default function DevicePage({
   APIBaseURL, URLToLoginPage, getUserSessionToken, clearUserSessionToken
@@ -19,6 +34,7 @@ export default function DevicePage({
   const [deviceRows, setDeviceRows] = useState([]);
   const [latestDatapoint, setLatestDatapoint] = useState();
   const [dashboardWidgets, setDashboardWidgets] = useState([]);
+  const [savedDashboardWidgets, setSavedDashboardWidgets] = useState([]);
   const [refreshObject, setRefreshObject] = useState({});
   const [activeTab, setActiveTab] = useState('dataLog');
   const navigate = useNavigate();
@@ -178,7 +194,10 @@ export default function DevicePage({
         const objectFromResponse = await response.json();
         if(!(objectFromResponse.widgets instanceof Array))
           return setErrorMessage("Server response .widgets attribute not Array.");
-        if(!cancelled) setDashboardWidgets(objectFromResponse.widgets);
+        if(!cancelled){
+          setDashboardWidgets(objectFromResponse.widgets);
+          setSavedDashboardWidgets(objectFromResponse.widgets);
+        }
       }catch(err){
         if(cancelled) return;
         if(err instanceof TypeError)
@@ -258,6 +277,8 @@ export default function DevicePage({
                 <DashboardWorkspace
                   dashboardWidgets={dashboardWidgets}
                   setDashboardWidgets={setDashboardWidgets}
+                  savedDashboardWidgets={savedDashboardWidgets}
+                  setSavedDashboardWidgets={setSavedDashboardWidgets}
                   latestDatapoint={latestDatapoint}
                   APIBaseURL={APIBaseURL}
                   deviceID={linkParameters.deviceIDStr}
@@ -289,6 +310,8 @@ export default function DevicePage({
 function DashboardWorkspace({
   dashboardWidgets,
   setDashboardWidgets,
+  savedDashboardWidgets,
+  setSavedDashboardWidgets,
   latestDatapoint,
   APIBaseURL,
   deviceID,
@@ -302,6 +325,7 @@ function DashboardWorkspace({
   const [addingWidgetType, setAddingWidgetType] = useState();
   const [editorTab, setEditorTab] = useState('add');
   const dashboardFrameRef = useRef();
+  const widgetsInSync = JSON.stringify(dashboardWidgets) === JSON.stringify(savedDashboardWidgets);
 
   async function saveDashboardWidgets(){
     let response;
@@ -343,6 +367,7 @@ function DashboardWorkspace({
       return setErrorMessage(`Received HTTP status ${response.status} from server.`);
 
     setErrorMessage('');
+    setSavedDashboardWidgets(dashboardWidgets);
   }
 
   return <>
@@ -363,6 +388,7 @@ function DashboardWorkspace({
           Save
         </button>
       }
+      {dashboardEditMode && widgetsInSync && <BsCheckLg className={styles.dashboardSavedIcon} title="Dashboard saved" aria-label="Dashboard saved" />}
     </div>
     <div className={styles.dashboardWorkspace}>
       {dashboardEditMode && <DashboardWidgetEditor
@@ -374,6 +400,7 @@ function DashboardWorkspace({
         setAddingWidgetType={setAddingWidgetType}
         editorTab={editorTab}
         setEditorTab={setEditorTab}
+        latestDatapoint={latestDatapoint}
       />}
       <div
         className={styles.dashboardFrame}
@@ -423,8 +450,14 @@ function DashboardWidgetEditor({
   setAddingWidgetType,
   editorTab,
   setEditorTab,
+  latestDatapoint,
 }){
-  function updateWidget(propertyName, value){
+  function updateWidget(propertyName, value, valueConstraints){
+    const [minimum, maximum] = valueConstraints;
+    const valueForComparison = typeof value === 'string' ? value.length : value;
+    if((minimum !== null && valueForComparison < minimum) || (maximum !== null && valueForComparison > maximum))
+      return;
+
     const updatedWidget = {...selectedDashboardWidget, [propertyName]: value};
     setSelectedDashboardWidget(updatedWidget);
     setDashboardWidgets(dashboardWidgets.map((widget) => (
@@ -452,20 +485,20 @@ function DashboardWidgetEditor({
       <h3 className={styles.dashboardEditorTitle}>Widget properties</h3>
       {selectedDashboardWidget ? <>
         {[
-          ['widgetType', 'Type', false],
-          ['columnName', 'Column', true],
-          ['widgetId', 'Widget ID', false],
-          ['xpos_quarters', 'X position', false],
-          ['ypos_quarters', 'Y position', false],
-          ['width_quarters', 'Width', false],
-          ['height_quarters', 'Height', false],
-        ].map(([propertyName, label, isText]) => <label className={styles.dashboardEditorProperty} key={propertyName}>
+          ['widgetType', 'Type', false, [MIN_DASHBOARD_WIDGET_TYPE, MAX_SUPPORTED_DASHBOARD_WIDGET_TYPE]],
+          ['columnName', 'Column', true, [MIN_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS, MAX_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS]],
+          ['widgetId', 'Widget ID', false, [MIN_DASHBOARD_WIDGET_ID, MAX_DASHBOARD_WIDGET_ID]],
+          ['xpos_quarters', 'X position', false, [MIN_DASHBOARD_WIDGET_X_POSITION_QUARTERS, DASHBOARD_FRAME_WIDTH_QUARTERS - 1]],
+          ['ypos_quarters', 'Y position', false, [MIN_DASHBOARD_WIDGET_Y_POSITION_QUARTERS, DASHBOARD_FRAME_HEIGHT_QUARTERS - 1]],
+          ['width_quarters', 'Width', false, [MIN_DASHBOARD_WIDGET_WIDTH_QUARTERS, DASHBOARD_FRAME_WIDTH_QUARTERS]],
+          ['height_quarters', 'Height', false, [MIN_DASHBOARD_WIDGET_HEIGHT_QUARTERS, DASHBOARD_FRAME_HEIGHT_QUARTERS]],
+        ].map(([propertyName, label, isText, valueConstraints]) => <label className={styles.dashboardEditorProperty} key={propertyName}>
           <span>{label}</span>
           <input
             type={isText ? 'text' : 'number'}
             value={selectedDashboardWidget[propertyName]}
               readOnly={propertyName === 'widgetId'}
-            onChange={(event) => updateWidget(propertyName, isText ? event.target.value : Number(event.target.value))}
+            onChange={(event) => updateWidget(propertyName, isText ? event.target.value : Number(event.target.value), valueConstraints)}
           />
         </label>)}
         <button
@@ -481,13 +514,33 @@ function DashboardWidgetEditor({
       </> : <p className={styles.dashboardEditorHint}>Select a widget in the frame to inspect its properties.</p>}
     </> : <>
       <h3 className={styles.dashboardEditorTitle}>Add widget</h3>
-      <button
-        className={`${styles.dashboardAddWidgetButton} ${addingWidgetType === 0 ? styles.dashboardAddWidgetButtonSelected : ''}`}
+      <div
+        className={`${styles.dashboardWidgetPreview} ${addingWidgetType === 0 ? styles.dashboardWidgetPreviewSelected : ''}`}
         onClick={() => setAddingWidgetType(addingWidgetType === 0 ? undefined : 0)}
-        type="button"
+        role="button"
+        tabIndex="0"
+        onKeyDown={(event) => {
+          if(event.key === 'Enter' || event.key === ' ')
+            setAddingWidgetType(addingWidgetType === 0 ? undefined : 0);
+        }}
       >
-        Label 01
-      </button>
+        <Label01
+          widget={{
+            widgetId: -1,
+            widgetType: 0,
+            columnName: 'Label 01',
+            xpos_quarters: 0,
+            ypos_quarters: 0,
+            width_quarters: 4,
+            height_quarters: 1,
+            previewValue: 27,
+          }}
+          editing
+          onWidgetClick={() => setAddingWidgetType(addingWidgetType === 0 ? undefined : 0)}
+          isSelected={addingWidgetType === 0}
+          preview
+        />
+      </div>
       <p className={styles.dashboardEditorHint}>
         {addingWidgetType === 0 ? 'Click an empty spot in the frame to place it.' : 'Select a widget type, then click the frame.'}
       </p>

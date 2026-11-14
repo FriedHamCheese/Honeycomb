@@ -12,6 +12,11 @@
   border-color: #FFC90E;
 }
 
+.dashboardReadingSelected{
+  border-color: #FFC90E;
+  box-shadow: 0px 0px 0px 1px #FFC90E;
+}
+
 .dashboardLabel{
   display: block;
   color: #777777;

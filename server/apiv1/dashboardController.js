@@ -3,7 +3,7 @@ import {
   HTTP_STATUS_FOR_SERVER_ERROR,
   MAX_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS,
   MAX_DASHBOARD_WIDGET_ID,
-  MAX_DASHBOARD_WIDGET_TYPE,
+  MAX_SUPPORTED_DASHBOARD_WIDGET_TYPE,
   MAX_WIDGETS_PER_DEVICE,
   MIN_DASHBOARD_WIDGET_COLUMN_NAME_CHARACTERS,
   MIN_DASHBOARD_WIDGET_ID,
@@ -37,7 +37,7 @@ function validateDashboardWidget(widget){
   if(!Number.isInteger(widget.widgetId) || widget.widgetId < MIN_DASHBOARD_WIDGET_ID || widget.widgetId > MAX_DASHBOARD_WIDGET_ID)
     return ".widgetId of an element in .widgets is out of range.";
 
-  const widgetTypeOutOfRange = widget.widgetType < MIN_DASHBOARD_WIDGET_TYPE || widget.widgetType > MAX_DASHBOARD_WIDGET_TYPE;
+  const widgetTypeOutOfRange = widget.widgetType < MIN_DASHBOARD_WIDGET_TYPE || widget.widgetType > MAX_SUPPORTED_DASHBOARD_WIDGET_TYPE;
   if(!Number.isInteger(widget.widgetType) || widgetTypeOutOfRange)
     return ".widgetType of an element in .widgets is out of range.";
 

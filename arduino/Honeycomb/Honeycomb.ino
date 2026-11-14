@@ -105,17 +105,18 @@ void loop() {
 
   Serial.println("Read OK.");
 
-  /*
-  newDatapointToServer["temperature_celsius"] = 27.0;
-  newDatapointToServer["relative_humidity_percent"] = 80.0;
-  newDatapointToServer["notes"] = "Ice cream";
-  const HoneycombError honeycombPatchError = honeycombClient.patchDatapoint(newDatapointToServer.as<JsonObject>());
-  if(honeycombPatchError != HoneycombError::ok){
-    Serial.print("Error: Honeycomb patch error (HoneycombError ");
-    Serial.print((uint16_t)honeycombPatchError);
-    Serial.println(')');
+  constexpr bool patchToServer = false;
+  if(patchToServer){
+    newDatapointToServer["temperature_celsius"] = 27.0;
+    newDatapointToServer["relative_humidity_percent"] = 80.0;
+    newDatapointToServer["notes"] = "Ice cream";
+    const HoneycombError honeycombPatchError = honeycombClient.patchDatapoint(newDatapointToServer.as<JsonObject>());
+    if(honeycombPatchError != HoneycombError::ok){
+      Serial.print("Error: Honeycomb patch error (HoneycombError ");
+      Serial.print((uint16_t)honeycombPatchError);
+      Serial.println(')');
+    }
   }
-  */
   
   if(!variableUpdateFromServer.errorCode) return;
   variableUpdateFromServer.errorCode = false;

@@ -157,11 +157,18 @@
   background-color: #E9B600;
 }
 
+.dashboardSavedIcon{
+  align-self: center;
+  color: #55A854;
+}
+
 .dashboardWorkspace{
   display: flex;
   align-items: flex-start;
   justify-content: center;
   gap: 16px;
+  box-sizing: border-box;
+  padding-bottom: 20px;
   height: calc(100% - 38px);
 }
 
@@ -252,6 +259,22 @@
   border-color: #FFC90E;
   background-color: #FFF9DF;
 }
+
+.dashboardWidgetPreview{
+  position: relative;
+  width: 100%;
+  height: 78px;
+  margin-bottom: 20px;
+  border: 0px;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.dashboardWidgetPreviewSelected{
+  background-color: #FFF9DF;
+  border-radius: 5px;
+}
+
 
 .dashboardEditorAction{
   width: 100%;

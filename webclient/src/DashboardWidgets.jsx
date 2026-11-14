@@ -4,22 +4,22 @@ import {
   DASHBOARD_FRAME_HEIGHT_QUARTERS,
 } from '../../constraints.js';
 
-function Label01({widget, latestDatapoint, editing, onWidgetClick}){
-  const value = latestDatapoint?.[widget.columnName];
+export function Label01({widget, latestDatapoint, editing, onWidgetClick, preview, isSelected}){
+  const value = widget.previewValue ?? latestDatapoint?.[widget.columnName];
   //if(value === undefined) return null;
 
   return (
     <div
-      className={styles.dashboardReading}
+      className={`${styles.dashboardReading} ${isSelected ? styles.dashboardReadingSelected : ''}`}
       onClick={(event) => {
         event.stopPropagation();
-        if(editing) onWidgetClick(widget);
+        if(editing && onWidgetClick) onWidgetClick(widget);
       }}
       style={{
-        left: `${widget.xpos_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
-        top: `${widget.ypos_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
-        width: `${widget.width_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
-        height: `${widget.height_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
+        left: preview ? 0 : `${widget.xpos_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
+        top: preview ? 0 : `${widget.ypos_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
+        width: preview ? '100%' : `${widget.width_quarters / DASHBOARD_FRAME_WIDTH_QUARTERS * 100}%`,
+        height: preview ? '78px' : `${widget.height_quarters / DASHBOARD_FRAME_HEIGHT_QUARTERS * 100}%`,
       }}
     >
       <span className={styles.dashboardLabel}>{widget.columnName}</span>
@@ -28,7 +28,7 @@ function Label01({widget, latestDatapoint, editing, onWidgetClick}){
   );
 }
 
-export default function DashboardWidgets({widgets, latestDatapoint, editing, onWidgetClick}){
+export default function DashboardWidgets({widgets, latestDatapoint, editing, onWidgetClick, preview}){
   if(!(widgets instanceof Array)) return null;
 
   return widgets.map((widget) => {
@@ -42,6 +42,7 @@ export default function DashboardWidgets({widgets, latestDatapoint, editing, onW
           latestDatapoint={latestDatapoint}
           editing={editing}
           onWidgetClick={onWidgetClick}
+          preview={preview}
         />;
         break;
       default:
