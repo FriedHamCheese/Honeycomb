@@ -15,7 +15,7 @@ import {
   HTTP_STATUS_FOR_BAD_REQUEST,
   HTTP_STATUS_FOR_UNAUTHORIZED,
   HTTP_STATUS_FOR_SERVER_ERROR,
-} from '../../constraints.js';
+} from '../../../constraints.js';
 
 import {randomBytes} from 'node:crypto';
 
