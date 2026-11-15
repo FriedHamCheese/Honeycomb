@@ -22,7 +22,6 @@ userRouter.post(
 userRouter.post(
   "/login", 
   async function(request, response){
-    console.log(request.body);
     loginUser(request, response, honeycombDBConnectionPool, saltAndRehash, getCachedLogin, saveToLoginCache)
   }
 );

@@ -17,9 +17,6 @@ import {
 import {
   deviceIDParameterValid,
   deviceSecretAuthenticationMiddleware,
-  checkCachedLoginMiddleware,
-  checkAuthForDeviceQueryMiddleware,
-  checkCachedLoginIsDeviceOwnerMiddleware,
 } from '../auth.js';
 
 import {
@@ -34,10 +31,10 @@ import {
   HTTP_STATUS_FOR_BAD_REQUEST,
   HTTP_STATUS_FOR_UNAUTHORIZED,
   HTTP_STATUS_FOR_SERVER_ERROR,
-} from '../../constraints.js';
+} from '../../../constraints.js';
 
 import {parseBodyToSQLTableAttributes} from "../utils.js";
-import {webSocketRouterToMCU} from './webSockets.js';
+//import {webSocketRouterToMCU} from './webSockets.js';
 
 import express from "express";
 export const deviceRouter = express.Router();
@@ -69,8 +66,8 @@ export async function addDatapoint(request, response, addDatapointLogic, sqlConn
   }
 }
 
-export async function registerDevice(request, response, sqlConnectionPool, registerDeviceLogic){
-  /*
+export async function registerDevice(request, response, sqlConnectionPool, registerDeviceLogic){ 
+ /*
   Input:
   - Authorization: user session token, uuid-hex, str[36]
   - {
@@ -128,7 +125,7 @@ export async function registerDevice(request, response, sqlConnectionPool, regis
       viewingSecret: deviceViewingSecretTrimmed, 
       deviceName: deviceNameTrimmed, 
       isCompositeDevice: false, 
-      ownerUserID: request.cachedLogin.userID
+      ownerUserID: request.get('user-id')
     });
     const warnings = await createInitialDeviceTable(request.body, String(deviceID), sqlConnection);
 
@@ -272,12 +269,21 @@ export async function getDevice(request, response){
 
 export async function getLatestDatapoint(request, response){
   try{
-    const [latestDatapoint] = await honeycombDBConnectionPool.execute(
-      `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}
-       ORDER BY __datapointIndex DESC LIMIT 1`
-    );
+    //Add verifying request.headers['user-id'] as int in auth.js
+    const [deviceWithMatchingIDResult, latestDatapointResult] = await Promise.all([
+      honeycombDBConnectionPool.execute(
+        "SELECT deviceID FROM Device WHERE deviceID=? and ownerUserID=?",
+        [request.deviceIDInt, request.headers['user-id']]
+      ),
+      honeycombDBConnectionPool.execute(
+        `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}
+         ORDER BY __datapointIndex DESC LIMIT 1`
+      ),
+    ]);
 
-    response.send({datapoint: latestDatapoint[0] || null});
+    if(deviceWithMatchingIDResult[0].length)
+      return response.send({datapoint: latestDatapointResult[0][0] || null});
+    response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "User not the owner of the device."})
   }catch(err){
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
     throw err;

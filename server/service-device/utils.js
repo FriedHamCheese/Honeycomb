@@ -1,6 +1,6 @@
 import {
   MAX_TYPE_CHARACTERS,
-} from '../constraints.js';
+} from '../../constraints.js';
 
 function sizedTypeToSQLType(typename){
   /*
