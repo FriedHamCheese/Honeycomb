@@ -300,6 +300,23 @@ export async function getUserDevicePreviews(request, response, honeycombDBConnec
   }
 };
 
+export async function checkUserOwnsDevice(request, response){
+  const userID = Number.parseInt(request.params.userID, 10);
+  if(Number.isNaN(userID) || userID < 0)
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "userID must be a positive integer."});
+
+  try{
+    const [matchingDevice] = await honeycombDBConnectionPool.execute(
+      "SELECT deviceID FROM Device WHERE deviceID = ? AND ownerUserID = ?",
+      [request.deviceIDInt, userID]
+    );
+    response.send({isOwner: matchingDevice.length !== 0});
+  }catch(err){
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
+    console.log(err);
+  }
+}
+
 export async function getLatestDatapoint(request, response){
   try{
     const [latestDatapoint] = await honeycombDBConnectionPool.execute(
@@ -311,6 +328,19 @@ export async function getLatestDatapoint(request, response){
   }catch(err){
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
     throw err;
+  }
+}
+
+export async function getDeviceTableColumns(request, response){
+  try{
+    const [columns] = await honeycombDBConnectionPool.execute(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'Honeycomb' AND TABLE_NAME = ?",
+      [getDeviceTableNameFromID(request.deviceIDStr)]
+    );
+    response.send({columns: columns.map((column) => column.COLUMN_NAME)});
+  }catch(err){
+    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
+    console.log(err);
   }
 }
 

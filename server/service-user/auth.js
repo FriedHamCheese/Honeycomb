@@ -5,6 +5,7 @@ import {createHash}  from 'node:crypto'
 
 import {
   FIRST_CHARACTER,
+  MAX_DEVICE_ID_CHARACTERS,
   UUID_CHARACTER_COUNT,
   
   HTTP_STATUS_FOR_BAD_REQUEST,
@@ -49,16 +50,23 @@ export function checkCachedLoginMiddleware(request, response, nextRoute){
 }
 
 export async function checkCachedLoginIsDeviceOwner(userLoginToken, deviceID, honeycombDBConnection){
-  const dbConnection = honeycombDBConnection || honeycombDBConnectionPool;
   const cachedLogin = await getCachedLogin(userLoginToken);
   if(!cachedLogin)
     return false;
-  
-  const [matchingDevice] = await honeycombDBConnectionPool.execute(
-    "SELECT isCompositeDevice FROM Device WHERE deviceID = ? AND ownerUserID = ?", [deviceID, cachedLogin.userID]
-  );
-  const correctUserAndDevice = matchingDevice.length !== 0;
-  return correctUserAndDevice;
+
+  try {
+    const deviceOwnershipResponse = await fetch(
+      `http://localhost:5200/apiv1/device/${deviceID}/isOwnedBy/${cachedLogin.userID}`,
+      {keepalive: true}
+    );
+    if(!deviceOwnershipResponse.ok)
+      return false;
+    const ownershipResult = await deviceOwnershipResponse.json();
+    return ownershipResult.isOwner === true;
+  } catch(err){
+    console.log(err);
+    return false;
+  }
 }
 
 export async function checkAuthForDeviceQueryMiddleware(request, response, nextRoute){
@@ -90,4 +98,15 @@ export async function checkCachedLoginIsDeviceOwnerMiddleware(request, response,
   return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({
     error: "User is not the owner of the device."
   });  
+}
+
+export function deviceIDParameterValid(request, response, nextRouter){
+  const deviceIDStr = request.params.deviceID.substring(FIRST_CHARACTER, MAX_DEVICE_ID_CHARACTERS).trim();
+  const deviceIDInt = Number.parseInt(deviceIDStr);
+  if(!deviceIDStr || Number.isNaN(deviceIDInt) || deviceIDInt < 0)
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "deviceID not a positive integer."});  
+  
+  request.deviceIDStr = deviceIDStr;
+  request.deviceIDInt = deviceIDInt;
+  nextRouter();
 }

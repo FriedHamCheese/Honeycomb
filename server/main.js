@@ -6,12 +6,12 @@ import http from 'node:http';
 const httpServer = http.createServer();
 httpServer.on('request', async (request, response) => {
   let urlToServiceEndpoint;
-  const rerouteToUserService = request.url.startsWith("/apiv1/user");
-  const rerouteToDeviceService = request.url.startsWith("/apiv1/device");  
-  if(rerouteToUserService)
-    urlToServiceEndpoint = "http://localhost:5100" + request.url;
-  else if(rerouteToDeviceService)
+  if(request.url.startsWith("/apiv1/user") || request.url.startsWith("/apiv1/dashboard"))
+    urlToServiceEndpoint = "http://localhost:5100" + request.url;  
+  
+  else if(request.url.startsWith("/apiv1/device"))
     urlToServiceEndpoint = "http://localhost:5200" + request.url;
+  
   else{
     response.writeHead(404);
     response.end();

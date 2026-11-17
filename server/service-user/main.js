@@ -1,5 +1,5 @@
 import {userRouter} from './apiv1/user.js';
-//import {dashboardRouter} from './apiv1/dashboard.js';
+import {dashboardRouter} from './apiv1/dashboard.js';
 import {sqlConnectionPool} from './sqlConnectionPool.js'
 
 import express from "express";
@@ -11,7 +11,7 @@ app.use(cors());
 const apiRouter = express.Router();
 
 apiRouter.use("/user", userRouter);
-//apiRouter.use("/dashboard", dashboardRouter);
+apiRouter.use("/dashboard", dashboardRouter);
 app.use("/apiv1", apiRouter);
 
 app.listen(5100, async () => {

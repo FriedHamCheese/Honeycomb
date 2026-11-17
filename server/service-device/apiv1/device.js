@@ -11,6 +11,8 @@ import {
   addDatapoint,
   getDevice,
   getLatestDatapoint,
+  checkUserOwnsDevice,
+  getDeviceTableColumns,
 } from './deviceController.js';
 
 import {
@@ -63,6 +65,18 @@ deviceRouter.get(
       path: process.env.WEBSOCKET_PATH,
     });
   }
+);
+
+deviceRouter.get(
+  "/:deviceID/columns",
+  deviceIDParameterValid,
+  async (request, response) => {getDeviceTableColumns(request, response);}
+);
+
+deviceRouter.get(
+  "/:deviceID/isOwnedBy/:userID",
+  deviceIDParameterValid,
+  async (request, response) => {checkUserOwnsDevice(request, response);}
 );
 
 deviceRouter.get(

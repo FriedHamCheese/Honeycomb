@@ -14,8 +14,7 @@ import {
   MIN_DASHBOARD_WIDGET_Y_POSITION_QUARTERS,
   DASHBOARD_FRAME_HEIGHT_QUARTERS,
   DASHBOARD_FRAME_WIDTH_QUARTERS,
-} from '../../constraints.js';
-import {getDeviceTableNameFromID} from './deviceLogic.js';
+} from '../../../constraints.js';
 
 export async function getDashboardWidgets(request, response, sqlConnectionPool){
   try{
@@ -84,11 +83,14 @@ export async function postDashboardWidgets(request, response, sqlConnectionPool)
   await sqlConnection.beginTransaction();
 
   try{
-    const [columnQuery] = await sqlConnection.execute(
-      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'Honeycomb' AND TABLE_NAME = ?",
-      [getDeviceTableNameFromID(request.deviceIDStr)]
+    const columnsResponse = await fetch(
+      `http://localhost:5200/apiv1/device/${request.deviceIDStr}/columns`,
+      {keepalive: true}
     );
-    const deviceColumnNames = new Set(columnQuery.map((column) => column.COLUMN_NAME));
+    if(!columnsResponse.ok)
+      throw new Error(`Device service returned HTTP ${columnsResponse.status} when retrieving device columns.`);
+    const {columns} = await columnsResponse.json();
+    const deviceColumnNames = new Set(columns);
 
     const queryValues = [];
     const queryPlaceholders = [];
@@ -140,4 +142,8 @@ export async function postDashboardWidgets(request, response, sqlConnectionPool)
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
     console.log(err);    
   }
+}
+
+function getDeviceTableNameFromID(deviceIDStr){
+  return `Device${deviceIDStr}_Table`;
 }

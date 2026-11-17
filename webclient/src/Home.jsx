@@ -27,7 +27,7 @@ function Home({
   async function getDevices(){
     let response;
     try{
-      response = await fetch(`${APIBaseURL}/apiv1/user/devicePreviews`, {
+      response = await fetch(`${APIBaseURL}/apiv1/device/userDeviceSummary`, {
         headers: {
           'Authorization': userSessionToken
         }
