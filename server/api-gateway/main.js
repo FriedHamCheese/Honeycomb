@@ -1,4 +1,5 @@
 import http from 'node:http';
+process.loadEnvFile(new URL('./.env', import.meta.url));
 import {
   GATEWAY_CONNECTIONS_CHECKING_INTERVAL_MS,
   GATEWAY_HEADERS_TIMEOUT_MS,
@@ -10,7 +11,7 @@ import {
   HTTP_STATUS_NOT_FOUND,
   HTTP_STATUS_REQUEST_ENTITY_TOO_LARGE,
   HTTP_STATUS_SERVICE_UNAVAILABLE,
-} from '../constraints.js';
+} from '../../constraints.js';
 import {
   DEVICE_ROUTE_PREFIX,
   GATEWAY_PORT,
@@ -19,7 +20,6 @@ import {
 } from './config.js';
 
 const JSON_CONTENT_TYPE = {'content-type': 'application/json'};
-
 function sendResponse(response, statusCode, headers, body) {
   try {
     response.writeHead(statusCode, headers);

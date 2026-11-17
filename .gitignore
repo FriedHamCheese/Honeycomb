@@ -5,3 +5,4 @@ arduino/Honeycomb/secrets.hpp
 /server/service-user/node_modules
 server/service-device/.env
 /server/api-gateway/node_modules
+/server/service-device/node_modules
