@@ -1,6 +1,10 @@
 import {deviceRouter} from './apiv1/device.js';
-//import {dashboardRouter} from './apiv1/dashboard.js';
+import {WebSocketRouterToMCU} from './apiv1/websockets.js';
 import {sqlConnectionPool} from './sqlConnectionPool.js'
+
+import http from 'node:http';
+
+process.loadEnvFile(new URL('./.env', import.meta.url));
 
 import express from "express";
 import cors from "cors";
@@ -11,10 +15,15 @@ app.use(cors());
 const apiRouter = express.Router();
 
 apiRouter.use("/device", deviceRouter);
-//apiRouter.use("/dashboard", dashboardRouter);
 app.use("/apiv1", apiRouter);
 
-app.listen(5200, async () => {
+const httpServer = http.createServer({}, app);
+
+const webSocketRouter = new WebSocketRouterToMCU();
+webSocketRouter.createSocket(httpServer, "/websocketapiv1");
+webSocketRouter.begin();
+
+httpServer.listen(5200, async () => {
   await sqlConnectionPool.execute("SELECT MAX(deviceID) FROM Honeycomb.Device");
   console.log(`Honeycomb server running on port ${5200}.`)
 });

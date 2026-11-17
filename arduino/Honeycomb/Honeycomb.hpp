@@ -86,7 +86,7 @@ class HoneycombClient{
     uint64_t deviceID,
     const char* deviceSecret
   );
-  int begin();
+  HoneycombError begin();
   HoneycombError authenticate();
   HoneycombError pingServer();
   HoneycombError readIncomingMessages();
@@ -99,7 +99,9 @@ class HoneycombClient{
   private:
   //Buffer is not multithreading-proof if writes or reads are executed simultaneously
   char scratchpadBuffer[scratchpadBufferBytes];
-  WiFiClient wifiClient;
+  WiFiClient httpWiFiClient;
+  HttpClient httpClient;
+  WiFiClient webSocketWiFiClient;
   WebSocketClient webSocketConnection;
   const char* deviceSecret;
   uint64_t deviceID;

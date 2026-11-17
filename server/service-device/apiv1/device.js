@@ -26,20 +26,6 @@ import {
   checkCachedLoginIsDeviceOwnerMiddleware,
 } from '../auth.js';
 
-import {
-  FIRST_CHARACTER,
-  MAX_DEVICE_SECRET_CHARACTERS,
-  MIN_DEVICE_NAME_CHARACTERS,
-  MAX_DEVICE_NAME_CHARACTERS,
-  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
-  
-  HTTP_STATUS_FOR_OK,
-  HTTP_STATUS_FOR_CREATED,
-  HTTP_STATUS_FOR_BAD_REQUEST,
-  HTTP_STATUS_FOR_UNAUTHORIZED,
-  HTTP_STATUS_FOR_SERVER_ERROR,
-} from '../../../constraints.js';
-
 import express from "express";
 export const deviceRouter = express.Router();
 
@@ -66,6 +52,17 @@ deviceRouter.get(
   "/userDeviceSummary", 
   checkCachedLoginMiddleware, 
   async function(request, response){getUserDevicePreviews(request, response, honeycombDBConnectionPool);}
+);
+
+deviceRouter.get(
+  "/webSocketURL",
+  async (request, response) => {
+    response.send({
+      domain: process.env.WEBSOCKET_DOMAIN,
+      port: Number(process.env.WEBSOCKET_PORT),
+      path: process.env.WEBSOCKET_PATH,
+    });
+  }
 );
 
 deviceRouter.get(

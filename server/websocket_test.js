@@ -1,13 +1,12 @@
 import {HTTP_STATUS_FOR_OK, WEBSOCKET_MS_BEFORE_STALE} from '../constraints.js';
 import {setTimeout} from 'node:timers/promises';
 
-async function testWebSocketRouterToMCU(){
-  const ENDPOINT_URL = "http://localhost:5001/websocketapiv1";
+async function testWebSocketRouterToMCU(webSocketURL){
   const MAX_TIMEOUT_MS = 5000;
 
-  function testConnect(){
+  function testConnect(webSocketURL){
     const asyncTimerAbort = new AbortController();
-    const socket = new WebSocket(ENDPOINT_URL);
+    const socket = new WebSocket(webSocketURL);
     
     setTimeout(MAX_TIMEOUT_MS, 'result', {signal: asyncTimerAbort.signal}).then(function (resolve){
       socket.close();
@@ -26,9 +25,9 @@ async function testWebSocketRouterToMCU(){
     }, {signal: asyncTimerAbort.signal});   
   }
   
-  function testAuth(){    
+  function testAuth(webSocketURL){    
     const asyncTimerAbort = new AbortController();
-    const socket = new WebSocket(ENDPOINT_URL);
+    const socket = new WebSocket(webSocketURL);
     const MAX_TIMEOUT_MS = 5000;
     setTimeout(MAX_TIMEOUT_MS, 'result', {signal: asyncTimerAbort.signal}).then(function (resolve){
       socket.close();
@@ -67,8 +66,8 @@ async function testWebSocketRouterToMCU(){
     }
   }
 
-  async function testPatchRequiresAuthentication(){
-    const socket = new WebSocket(ENDPOINT_URL);
+  async function testPatchRequiresAuthentication(webSocketURL){
+    const socket = new WebSocket(webSocketURL);
     const abortAsync = new AbortController();
     let testPassed = false;
 
@@ -106,8 +105,8 @@ async function testWebSocketRouterToMCU(){
     }
   }
 
-  async function testAuthenticatedPatch(){
-    const socket = new WebSocket(ENDPOINT_URL);
+  async function testAuthenticatedPatch(webSocketURL){
+    const socket = new WebSocket(webSocketURL);
     const abortAsync = new AbortController();
     let patchSent = false;
     let socketError = false;
@@ -157,14 +156,14 @@ async function testWebSocketRouterToMCU(){
     return testPassed;
   }
 
-  async function testCompetingForStaleAuths(){        
+  async function testCompetingForStaleAuths(webSocketURL){        
     try{
-      const firstAuthSocket = new WebSocket(ENDPOINT_URL);
+      const firstAuthSocket = new WebSocket(webSocketURL);
       if(!(await authenticateFirstSocket(firstAuthSocket))){
         firstAuthSocket.close();
         return;
       }
-      const secondAuthSocket = new WebSocket(ENDPOINT_URL);
+      const secondAuthSocket = new WebSocket(webSocketURL);
       if(!(await autenticateSecondSocketFirstTime(secondAuthSocket))){
         firstAuthSocket.close();
         secondAuthSocket.close();        
@@ -287,11 +286,30 @@ async function testWebSocketRouterToMCU(){
     }
   }//testCompetingForStaleAuths()
   
-  testConnect();
-  testAuth();
-  await testPatchRequiresAuthentication();
-  await testAuthenticatedPatch();
-  await testCompetingForStaleAuths();
+  testConnect(webSocketURL);
+  testAuth(webSocketURL);
+  await testPatchRequiresAuthentication(webSocketURL);
+  await testAuthenticatedPatch(webSocketURL);
+  await testCompetingForStaleAuths(webSocketURL);
 }
 
-testWebSocketRouterToMCU();
+async function getWebSocketURL(){
+  const response = await fetch("http://localhost:5000/apiv1/device/webSocketURL");
+  if(!response.ok)
+    throw new Error(`Device service returned HTTP ${response.status} while resolving websocket URL.`);
+
+  const webSocketURL = await response.json();
+  if(typeof webSocketURL !== "object" || webSocketURL === null)
+    throw new TypeError("Device service websocket URL response must be an object.");
+  if(typeof webSocketURL.domain !== "string")
+    throw new TypeError("Device service websocket URL response must contain a string .domain.");
+  if(!Number.isInteger(webSocketURL.port))
+    throw new TypeError("Device service websocket URL response must contain an integer .port.");
+  if(typeof webSocketURL.path !== "string")
+    throw new TypeError("Device service websocket URL response must contain a string .path.");
+  return `http://${webSocketURL.domain}:${webSocketURL.port}${webSocketURL.path}`;
+}
+
+getWebSocketURL()
+  .then((webSocketURL) => testWebSocketRouterToMCU(webSocketURL))
+  .catch((error) => console.error("Unable to run websocket tests:", error));

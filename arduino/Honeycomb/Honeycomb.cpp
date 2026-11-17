@@ -2,16 +2,18 @@
 #include <stdio.h>
 
 HoneycombClient::HoneycombClient(
-  const char* serverURL, 
-  uint16_t serverPort, 
+  const char* serverURL,
+  uint16_t serverPort,
   uint16_t maxIncomingBytes, 
   unsigned long maxMsBeforeTimeout,
   uint64_t deviceID, 
   const char* deviceSecret
 )
 : variablesFromServer(nullptr),
-  wifiClient(),
-  webSocketConnection(wifiClient, serverURL, serverPort),
+  httpWiFiClient(),
+  httpClient(httpWiFiClient, serverURL, serverPort),
+  webSocketWiFiClient(),
+  webSocketConnection(webSocketWiFiClient, serverURL, 80),
   deviceSecret(deviceSecret),
   deviceID(deviceID),
   millisLastServerMessage(millis()),
@@ -22,15 +24,46 @@ HoneycombClient::HoneycombClient(
 {
 }
 
-int HoneycombClient::begin(){
+HoneycombError HoneycombClient::begin(){
+  this->httpClient.flush();
+  this->httpClient.stop();
+
   this->authenticated = false;
-  const int connectionBeginError = this->webSocketConnection.begin("/websocketapiv1");
+  this->connected = false;
+  
+  const int httpError = this->httpClient.get("/apiv1/device/webSocketURL");
+  if(httpError)
+    return httpErrorToHoneycombError(httpError);
+  
+  constexpr int httpOK = 200;
+  if(this->httpClient.responseStatusCode() != httpOK)
+    return HoneycombError::httpInvalidServerResponse;
+  if(this->httpClient.contentLength() > HoneycombClient::scratchpadBufferBytes)
+    return HoneycombError::maxSize;
+  
+  const String httpResponseBody = this->httpClient.responseBody();
+  JsonDocument responseJson;
+  const DeserializationError jsonToObjectError = deserializeJson(responseJson, httpResponseBody);
+  if(jsonToObjectError != DeserializationError::Ok)
+    return deserializationErrorToHoneycombError(jsonToObjectError);
+  
+  const bool responseObjectIncorrectTypes = (
+    !responseJson["domain"].is<const char*>() || !responseJson["port"].is<uint16_t>() || !responseJson["path"].is<const char*>()
+  );
+  if(responseObjectIncorrectTypes)
+    return HoneycombError::httpInvalidServerResponse;
+  
+  this->webSocketConnection = WebSocketClient(
+    this->webSocketWiFiClient, responseJson["domain"].as<const char*>(), responseJson["port"].as<uint16_t>()
+  );
+  
+  const int connectionBeginError = this->webSocketConnection.begin(responseJson["path"].as<const char*>());
   if(!connectionBeginError){
     this->connected = true;
     this->millisLastServerMessage = millis();
   }
   
-  return connectionBeginError;
+  return HoneycombError::httpConnectionFailed;
 }
 
 HoneycombError HoneycombClient::authenticate(){

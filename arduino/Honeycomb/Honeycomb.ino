@@ -56,10 +56,10 @@ void loop() {
   }
 
   if(not honeycombClient.isConnected()){
-    const int honeycombInitError = honeycombClient.begin();
-    if(honeycombInitError){
+    const HoneycombError honeycombInitError = honeycombClient.begin();
+    if(honeycombInitError != HoneycombError::ok){
       Serial.print("Error: error initialising honeycomb websocket instance (HoneycombError ");
-      Serial.print(honeycombInitError);
+      Serial.print((int)honeycombInitError);
       Serial.println(')');
       return;
     }
