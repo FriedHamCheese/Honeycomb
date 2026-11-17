@@ -6,6 +6,7 @@ import {
 import {
   registerDevice,
   registerCompositeDevice,
+  getUserDevicePreviews,
   deleteDevice,
   addDatapoint,
   getDevice,
@@ -20,7 +21,24 @@ import {
 import {
   deviceIDParameterValid,
   deviceSecretAuthenticationMiddleware,
+  checkCachedLoginMiddleware,
+  checkAuthForDeviceQueryMiddleware,
+  checkCachedLoginIsDeviceOwnerMiddleware,
 } from '../auth.js';
+
+import {
+  FIRST_CHARACTER,
+  MAX_DEVICE_SECRET_CHARACTERS,
+  MIN_DEVICE_NAME_CHARACTERS,
+  MAX_DEVICE_NAME_CHARACTERS,
+  MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
+  
+  HTTP_STATUS_FOR_OK,
+  HTTP_STATUS_FOR_CREATED,
+  HTTP_STATUS_FOR_BAD_REQUEST,
+  HTTP_STATUS_FOR_UNAUTHORIZED,
+  HTTP_STATUS_FOR_SERVER_ERROR,
+} from '../../../constraints.js';
 
 import express from "express";
 export const deviceRouter = express.Router();
@@ -34,31 +52,29 @@ deviceRouter.post(
 
 deviceRouter.post(
   "/", 
+  checkCachedLoginMiddleware,
   async (request, response) => {registerDevice(request, response, sqlConnectionPool, registerDeviceLogic);}
 );
 
-deviceRouter.get(
-  '/:deviceID/auth',
-  deviceIDParameterValid,
-  deviceSecretAuthenticationMiddleware,
-  async (request, response) => {response.send({deviceID: request.deviceIDInt});}
-);
-
-/*
 deviceRouter.post(
   "/compositeDevice",
   checkCachedLoginMiddleware,
   async (request, response) => {registerCompositeDevice(request, response, sqlConnectionPool, registerDeviceLogic);}
 );
-*/
+
+deviceRouter.get(
+  "/userDeviceSummary", 
+  checkCachedLoginMiddleware, 
+  async function(request, response){getUserDevicePreviews(request, response, honeycombDBConnectionPool);}
+);
 
 deviceRouter.get(
   "/:deviceID/latest",
   deviceIDParameterValid,
+  checkCachedLoginMiddleware,
   async (request, response) => {getLatestDatapoint(request, response);}
 );
 
-/*
 deviceRouter.get(
   "/:deviceID",
   deviceIDParameterValid,
@@ -72,4 +88,3 @@ deviceRouter.delete(
   checkCachedLoginIsDeviceOwnerMiddleware, 
   async (request, response) => {deleteDevice(request, response);}
 );
-*/

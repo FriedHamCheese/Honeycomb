@@ -1,79 +1,56 @@
-import {userRouter} from './apiv1/user.js';
-import {deviceRouter} from './apiv1/device.js';
-
 import express from "express";
 import cors from "cors";
 
 import http from 'node:http';
 
-const app = express();
-app.use(express.json({limit: "1kb"}));
-app.use(cors());
-const apiRouter = express.Router();
-
-apiRouter.use("/device", deviceRouter);
-apiRouter.use("/user", userRouter);
-//apiRouter.use("/dashboard", dashboardRouter);
-app.use("/apiv1", apiRouter);
-
 const httpServer = http.createServer();
-//should validate authentication per request with auth but periodically
 httpServer.on('request', async (request, response) => {
-  const headers = request.headers;
-  const userAuthAttempt = (typeof headers.authorization) === "string";  
-  const deviceSecret = headers.devicesecret;
-  const devicePathMatch = request.url.match(/^\/apiv1\/device\/([^/]+)(?:\/|$)/);
-
-  if(userAuthAttempt){
-    //check cache policy, timeout
-    try {
-      const userAuthResponse = await fetch(
-        "http://localhost:5100/apiv1/user", 
-        {
-          headers: {'Authorization': headers.authorization},
-          keepalive: true,
-        }
-      );
-      if(userAuthResponse.ok){
-        const cachedLogin = await userAuthResponse.json();
-        request.headers['user-id'] = cachedLogin.userID;     
-      }
-    }catch(error){
-      if(error instanceof TypeError){
-        response.writeHead(502, {'content-type': 'application/json'});
-        return response.end(JSON.stringify({error: error.message}));
-      }
-      throw error;
-    }
+  let urlToServiceEndpoint;
+  const rerouteToUserService = request.url.startsWith("/apiv1/user");
+  const rerouteToDeviceService = request.url.startsWith("/apiv1/device");  
+  if(rerouteToUserService)
+    urlToServiceEndpoint = "http://localhost:5100" + request.url;
+  else if(rerouteToDeviceService)
+    urlToServiceEndpoint = "http://localhost:5200" + request.url;
+  else{
+    response.writeHead(404);
+    response.end();
+    return;
   }
 
-  if(typeof deviceSecret === "string" && devicePathMatch){
-    try {
-      const deviceAuthResponse = await fetch(
-        `http://localhost:5200/apiv1/device/${devicePathMatch[1]}/auth`,
-        {
-          headers: {devicesecret: deviceSecret},
-          keepalive: true,
-        }
-      );
-      if(!deviceAuthResponse.ok){
-        const errorBody = await deviceAuthResponse.text();
-        response.writeHead(deviceAuthResponse.status, {
-          'content-type': deviceAuthResponse.headers.get('content-type') || 'text/plain',
-        });
-        return response.end(errorBody);
+  try {
+    const requestBodyChunks = [];
+    let bytesRead = 0;
+    for await (const chunk of request) {
+      bytesRead += chunk.length;
+      if(bytesRead > 1024){
+        response.writeHead(413, {'content-type': 'application/json'});
+        return response.end(JSON.stringify({error: "Request body exceeds 1KB."}));
       }
-    }catch(error){
-      if(error instanceof TypeError){
-        response.writeHead(502, {'content-type': 'application/json'});
-        return response.end(JSON.stringify({error: error.message}));
-      }
-      throw error;
+      requestBodyChunks.push(chunk);
     }
+
+    const fetchOptions = {
+      method: request.method,
+      headers: request.headers,
+    };
+    if(requestBodyChunks.length)
+      fetchOptions.body = Buffer.concat(requestBodyChunks);
+
+    const responseFromService = await fetch(urlToServiceEndpoint, fetchOptions);
+    const responseHeaders = {};
+    responseFromService.headers.forEach((value, key) => {
+      if(key !== 'connection' && key !== 'transfer-encoding')
+        responseHeaders[key] = value;
+    });
+    response.writeHead(responseFromService.status, responseHeaders);
+    return response.end(Buffer.from(await responseFromService.arrayBuffer()));
+  } catch(error) {
+    if(response.headersSent)
+      return response.destroy(error);
+    response.writeHead(502, {'content-type': 'application/json'});
+    return response.end(JSON.stringify({error: error.message}));
   }
-  
-  
-  app(request, response);
 });
 
 httpServer.listen(5000, async () => {

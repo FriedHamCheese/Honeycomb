@@ -4,7 +4,7 @@ import {
   MAX_DEVICE_SECRET_CHARACTERS,
   MAX_WEBSOCKET_TO_SERVER_BYTES,
   WEBSOCKET_MS_BEFORE_STALE,
-  } from '../../constraints.js';
+  } from '../../../constraints.js';
 import {addDatapointLogic, getDeviceTableNameFromID} from './deviceLogic.js';
 import {deviceSecretAuthentication, secretAuthenticationError} from '../auth.js';
 import {sqlConnectionPool} from '../sqlConnectionPool.js';

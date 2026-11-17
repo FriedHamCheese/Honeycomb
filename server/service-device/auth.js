@@ -113,3 +113,98 @@ export async function deviceSecretAuthenticationMiddleware(request, response, ne
   
   nextRouter();
 }
+
+
+const cachedLoginByToken = new Map();
+const CACHED_LOGIN_TTL_MS = 60 * 1000;
+
+export async function getCachedLogin(userToken){
+  if(typeof userToken !== "string") return null;
+
+  const cachedEntry = cachedLoginByToken.get(userToken);
+  if(cachedEntry && cachedEntry.expiresAt > Date.now())
+    return cachedEntry.cachedLogin;
+  if(cachedEntry)
+    cachedLoginByToken.delete(userToken);
+
+  try {
+    const userAuthResponse = await fetch(
+      "http://localhost:5100/apiv1/user",
+      {
+        headers: {Authorization: userToken},
+        keepalive: true,
+      }
+    );
+    const cachedLogin = userAuthResponse.ok
+      ? await userAuthResponse.json()
+      : null;
+    cachedLoginByToken.set(userToken, {
+      cachedLogin,
+      expiresAt: Date.now() + CACHED_LOGIN_TTL_MS,
+    });
+    return cachedLogin;
+  } catch {
+    return null;
+  }
+}
+
+export async function checkCachedLoginMiddleware(request, response, nextRoute){
+  /*
+  Input: 
+  - Authorization: user session token, uuidv7-hex, str[36]
+  
+  Returns:
+  - HTTP status 401 with .error: str; if session token not string type or not in cached logins.
+  - Nothing, adds request.cachedLogin, calls nextRoute()
+  */
+  const userLoginToken = request.get('Authorization');
+  const cachedLogin = await getCachedLogin(userLoginToken);
+  if(!cachedLogin) 
+    return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({error: "Invalid user login token."});
+  request.cachedLogin = cachedLogin;
+  nextRoute();
+}
+
+export async function checkCachedLoginIsDeviceOwner(userLoginToken, deviceID, honeycombDBConnection){
+  const dbConnection = honeycombDBConnection || honeycombDBConnectionPool;
+  const cachedLogin = await getCachedLogin(userLoginToken);
+  if(!cachedLogin)
+    return false;
+  
+  const [matchingDevice] = await honeycombDBConnectionPool.execute(
+    "SELECT isCompositeDevice FROM Device WHERE deviceID = ? AND ownerUserID = ?", [deviceID, cachedLogin.userID]
+  );
+  const correctUserAndDevice = matchingDevice.length !== 0;
+  return correctUserAndDevice;
+}
+
+export async function checkAuthForDeviceQueryMiddleware(request, response, nextRoute){
+  const deviceSecret = request.get("deviceSecret");
+  const deviceViewingSecret = request.get("deviceViewingSecret");
+  const userLoginToken = request.get("Authorization");
+  
+  const hasOnlyUserLoginToken = (typeof(deviceSecret) !== "string") && (typeof(deviceViewingSecret) !== "string");
+  if(!hasOnlyUserLoginToken){
+    const error = await deviceSecretAndViewingSecretAuthentication(
+      request.deviceIDInt, deviceSecret, deviceViewingSecret, honeycombDBConnectionPool
+    );
+    if(!error) return nextRoute();
+  }
+  
+  const loggedInUserIsOwner = await checkCachedLoginIsDeviceOwner(userLoginToken, request.deviceIDInt);
+  if(loggedInUserIsOwner) return nextRoute();
+  
+  return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({
+    error: "Device secret, viewing secret and user token are all invalid."
+  });
+}
+
+export async function checkCachedLoginIsDeviceOwnerMiddleware(request, response, nextRoute){
+  const userLoginToken = request.get("Authorization");
+  const loggedInUserIsOwner = await checkCachedLoginIsDeviceOwner(userLoginToken, request.deviceIDInt);
+  if(loggedInUserIsOwner) return nextRoute();
+  
+  return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({
+    error: "User is not the owner of the device."
+  });  
+}
