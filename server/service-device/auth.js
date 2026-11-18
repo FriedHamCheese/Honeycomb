@@ -1,4 +1,5 @@
 import {honeycombDBConnectionPool} from './sqlConnectionPool.js';
+process.loadEnvFile(new URL('./.env', import.meta.url));
 
 import {uuidv7} from 'uuidv7';
 import {createHash}  from 'node:crypto'
@@ -13,6 +14,10 @@ import {
   HTTP_STATUS_FOR_BAD_REQUEST,
   HTTP_STATUS_FOR_UNAUTHORIZED,
 } from '../../constraints.js';
+
+import{
+  USE_INTER_SERVICE_CALL_MOCK,
+} from './config.js';
 
 export function saltAndRehash(secret, saltStr){
   const sha512Hash = createHash('sha512');
@@ -114,6 +119,7 @@ export async function deviceSecretAuthenticationMiddleware(request, response, ne
   nextRouter();
 }
 
+//Probably alright to not unit test login methods, auth will be on api gateway
 
 const cachedLoginByToken = new Map();
 const CACHED_LOGIN_TTL_MS = 60 * 1000;
@@ -128,16 +134,18 @@ export async function getCachedLogin(userToken){
     cachedLoginByToken.delete(userToken);
 
   try {
-    const userAuthResponse = await fetch(
-      "http://localhost:5100/apiv1/user",
-      {
+    let cachedLogin;
+    if (USE_INTER_SERVICE_CALL_MOCK) {
+      // The test fixture contains one user (Jane Doe, ID 1); any supplied
+      // syntactically valid token represents that fixture user in mock mode.
+      cachedLogin = {userID: 1, email: 'jane.doe@example.com', token: userToken};
+    } else {
+      const userAuthResponse = await fetch(`${AUTH_SERVICE_DOMAIN}/apiv1/user`, {
         headers: {Authorization: userToken},
         keepalive: true,
-      }
-    );
-    const cachedLogin = userAuthResponse.ok
-      ? await userAuthResponse.json()
-      : null;
+      });
+      cachedLogin = userAuthResponse.ok ? await userAuthResponse.json() : null;
+    }
     cachedLoginByToken.set(userToken, {
       cachedLogin,
       expiresAt: Date.now() + CACHED_LOGIN_TTL_MS,

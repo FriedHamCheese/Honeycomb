@@ -6,7 +6,7 @@ START TRANSACTION;
 */
 
 CREATE TABLE UserObject(
-  id INT(64) PRIMARY KEY AUTO_INCREMENT,
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(48) UNIQUE NOT NULL,
   saltedPassword VARCHAR(128) NOT NULL,
   salt VARCHAR(32) NOT NULL,
@@ -14,17 +14,17 @@ CREATE TABLE UserObject(
 );
 
 CREATE TABLE DashboardWidget(
-  deviceID INT(64) NOT NULL,
+  deviceID BIGINT UNSIGNED NOT NULL,
   widgetId INT UNSIGNED NOT NULL,
-  widgetType INT(8) NOT NULL,
+  widgetType TINYINT UNSIGNED NOT NULL,
   columnName VARCHAR(32) NOT NULL,
   /*
   Using 9:18, the height is exactly 2x the width, thus allowing a simple quarter grid
   */
-  xpos_quarters INT(2) NOT NULL,
-  ypos_quarters INT(3) NOT NULL,
-  width_quarters INT(2) NOT NULL,
-  height_quarters INT(3) NOT NULL,
+  xpos_quarters TINYINT UNSIGNED NOT NULL,
+  ypos_quarters TINYINT UNSIGNED NOT NULL,
+  width_quarters TINYINT UNSIGNED NOT NULL,
+  height_quarters TINYINT UNSIGNED NOT NULL,
   
   PRIMARY KEY (deviceID, widgetId)
 );

@@ -1,0 +1,15 @@
+Frontend tests:
+- End-to-end
+- Mock backend?
+
+Backend/database tests:
+- End-to-end
+- Shared testing facilities, real and simulated database calls contain test data
+  - switch service url to server or gateway
+  - 1 test per condition of endpoint
+  - Gateway endpoint testing
+  - Multiservice endpoint testing
+  - Isolated service endpoint testing
+- too deep, not for now:
+  - request/response source code test, controller layer
+  - logic test ig

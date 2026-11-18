@@ -3,12 +3,17 @@ process.loadEnvFile(new URL('./.env', import.meta.url));
 import {deviceRouter} from './apiv1/device.js';
 import {WebSocketRouterToMCU} from './apiv1/websockets.js';
 
-//sql parameters into .env
 import {sqlConnectionPool} from './sqlConnectionPool.js'
 
 import http from 'node:http';
 const DEVICE_SERVICE_PORT = Number(process.env.DEVICE_SERVICE_PORT);
-import {SERVICE_MAX_REQUEST_BODY_BYTES} from '../../constraints.js';
+import {
+  SERVICE_MAX_REQUEST_BODY_BYTES,
+  GATEWAY_CONNECTIONS_CHECKING_INTERVAL_MS,
+  GATEWAY_HEADERS_TIMEOUT_MS,
+  GATEWAY_MAX_REQUEST_BODY_BYTES,
+  GATEWAY_REQUEST_TIMEOUT_MS,
+} from '../../constraints.js';
 
 import express from "express";
 import cors from "cors";
@@ -22,8 +27,11 @@ const apiRouter = express.Router();
 apiRouter.use("/device", deviceRouter);
 app.use("/apiv1", apiRouter);
 
-//Copy config.js from gateway
-const httpServer = http.createServer({}, app);
+const httpServer = http.createServer({
+  connectionsCheckingInterval: GATEWAY_CONNECTIONS_CHECKING_INTERVAL_MS,
+  headersTimeout: GATEWAY_HEADERS_TIMEOUT_MS,
+  requestTimeout: GATEWAY_REQUEST_TIMEOUT_MS,
+}, app);
 
 const webSocketRouter = new WebSocketRouterToMCU();
 webSocketRouter.createSocket(httpServer, "/websocketapiv1");
