@@ -182,7 +182,11 @@ export function checkPartialCompositeDeviceViewParameters(objectFromRequest){
   if(!Number.isInteger(objectFromRequest.mergeUsingCondition))
     return createCompositeDeviceViewError.MERGING_CONDITION;
   if(objectFromRequest.mergeUsingCondition < 0)
-    return createCompositeDeviceViewError.DEVICE0ID; 
+    return createCompositeDeviceViewError.MERGING_CONDITION; 
+  
+  if(objectFromRequest.mergeUsingCondition !== 0)
+    if(typeof(objectFromRequest.mergeConditionArgument) !== "number")
+      return createCompositeDeviceViewError.MERGING_CONDITION_ARGUMENT;
   
   return createCompositeDeviceViewError.OK;
 }
@@ -252,9 +256,6 @@ export async function createCompositeDeviceViewLogic(
     return createCompositeDeviceViewError.OK;
   }
   if(objectFromRequest.mergeUsingCondition === MERGE_ON_VALUE_WITHIN_RANGE){
-    if(Number.isNaN(objectFromRequest.mergeConditionArgument))
-      return createCompositeDeviceViewError.MERGING_CONDITION_ARGUMENT;
-    
     const withinRangeCondition = ` WHERE ABS(Honeycomb.${device0TableName}.${trimmedDevice0ConditionField} - ${device1TableName}.${trimmedDevice1ConditionField}) <= ${objectFromRequest.mergeConditionArgument}`;
     await sqlConnection.execute(viewWithoutCondition + withinRangeCondition);
     return createCompositeDeviceViewError.OK;

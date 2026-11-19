@@ -19,7 +19,24 @@ import {
 } from '../auth.js';
 
 import express from "express";
+import {HTTP_STATUS_FOR_OK} from '../../../constraints.js';
 export const deviceRouter = express.Router();
+
+deviceRouter.get(
+  "/test/id/:deviceID",
+  deviceIDParameterValid,
+  (request, response) => response.send({
+    deviceIDInt: request.deviceIDInt,
+    deviceIDStr: request.deviceIDStr,
+  })
+);
+
+deviceRouter.get(
+  "/test/:deviceID/owner",
+  deviceIDParameterValid,
+  checkCachedLoginIsDeviceOwnerMiddleware,
+  (request, response) => response.sendStatus(HTTP_STATUS_FOR_OK)
+);
 
 deviceRouter.post(
   /*
