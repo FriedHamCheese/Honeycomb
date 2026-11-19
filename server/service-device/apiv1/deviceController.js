@@ -1,26 +1,18 @@
 import {
-  registerDeviceLogic,
   createInitialDeviceTable, 
+  registerDeviceLogic,
   addDatapointLogic,
   deleteDeviceLogic,
   createCompositeDeviceViewLogic,
   createCompositeDeviceViewError,
   createCompositeDeviceViewErrorStr,
   getDeviceTableNameFromID,
+  checkPartialCompositeDeviceViewParameters,
 } from './deviceLogic.js';
 
 import {
   sqlConnectionPool,
-  honeycombDBConnectionPool,
 } from '../sqlConnectionPool.js'
-
-import {
-  deviceIDParameterValid,
-  deviceSecretAuthenticationMiddleware,
-  checkCachedLoginMiddleware,
-  checkAuthForDeviceQueryMiddleware,
-  checkCachedLoginIsDeviceOwnerMiddleware,
-} from '../auth.js';
 
 import {
   FIRST_CHARACTER,
@@ -37,24 +29,15 @@ import {
 } from '../../../constraints.js';
 
 import {parseBodyToSQLTableAttributes} from "../utils.js";
-import {webSocketRouterToMCU} from './webSockets.js';
 
 import express from "express";
 export const deviceRouter = express.Router();
 
-export async function addDatapoint(request, response, addDatapointLogic, sqlConnectionPool){
-  /*
-  Input:
-  - Authorization: device secret, str[1-32]
-  - {(attributes: value)}
-  
-  Returns:
-  - HTTP status 201 if datapoint is added
-  - HTTP status 400 with .error:str, if device is a composite device, or device ID from URL is not a positive integer
-  - HTTP status 401 if Authorization is not a string type or not secret of the device
-  - HTTP status 500 for undocumented server errors
-  */
+export async function addDatapoint(request, response){
   const objectFromResponse = request.body;
+  if((typeof objectFromResponse) !== "object")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Response body must be JSON."});
+  
   const tableName = getDeviceTableNameFromID(request.deviceIDInt);
   
   try{
@@ -69,29 +52,10 @@ export async function addDatapoint(request, response, addDatapointLogic, sqlConn
   }
 }
 
-export async function registerDevice(request, response, sqlConnectionPool, registerDeviceLogic){
-  /*
-  Input:
-  - Authorization: user session token, uuid-hex, str[36]
-  - {
-    __deviceName: str[1-32],
-    __deviceSecret: str[0-32],
-    __deviceViewingSecret: str[0-32],
-    (attribute: type),
-    ...
-  }
+export async function registerDevice(request, response){
+  if((typeof request.body) !== "object")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Response body must be JSON."});
   
-  Returns:
-  - HTTP status 201 with {
-    message: str
-    warnings: str
-    deviceID: int
-  } if successful
-    if successful
-  - HTTP status 400 with .error: str if request is invalid
-  - HTTP status 401 if Authorization token is invalid
-  - HTTP status 500 for undocumented server errors
-  */
   if((typeof request.body.__deviceSecret) !== "string")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceSecret not string type."});
   if((typeof request.body.__deviceViewingSecret) !== "string")
@@ -118,75 +82,72 @@ export async function registerDevice(request, response, sqlConnectionPool, regis
     });
   }
  
-  const sqlConnection = await sqlConnectionPool.getConnection();
-  await sqlConnection.beginTransaction();
-
+  let sqlConnection;
+  let deviceID, warnings;
   try{
-    const deviceID = await registerDeviceLogic({
-      sqlConnection, 
-      deviceSecret: deviceSecretTrimmed, 
-      viewingSecret: deviceViewingSecretTrimmed, 
-      deviceName: deviceNameTrimmed, 
-      isCompositeDevice: false, 
-      ownerUserID: request.cachedLogin.userID
-    });
-    const warnings = await createInitialDeviceTable(request.body, String(deviceID), sqlConnection);
-
-    await sqlConnection.commit();
-    sqlConnectionPool.releaseConnection(sqlConnection);
-    response.status(HTTP_STATUS_FOR_CREATED).send({
-      message: `created initial table for device ID ${String(deviceID)}.`,
-      warnings: warnings,
-      deviceID: deviceID,
-    });
+    sqlConnection = await sqlConnectionPool.getConnection();
+    await sqlConnection.beginTransaction();
+  
+    let registrationError = false;
+    try{
+      deviceID = await registerDeviceLogic({
+        sqlConnection, 
+        deviceSecret: deviceSecretTrimmed, 
+        viewingSecret: deviceViewingSecretTrimmed, 
+        deviceName: deviceNameTrimmed, 
+        isCompositeDevice: false, 
+        ownerUserID: request.cachedLogin.userID
+      });
+      warnings = await createInitialDeviceTable(request.body, String(deviceID), sqlConnection);
+      await sqlConnection.commit();
+    }catch(err){
+      registrationError = true;
+      await sqlConnection.rollback();
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+      console.log(err);
+    }
+    
+    if(!registrationError){
+      response.status(HTTP_STATUS_FOR_CREATED).send({
+        message: `created initial table for device ID ${String(deviceID)}.`,
+        warnings: warnings,
+        deviceID: deviceID,
+      });
+    }
   }catch(err){
-    await sqlConnection.rollback();
-    sqlConnectionPool.releaseConnection(sqlConnection);
-    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
     console.log(err);
+    //Try sending again, a single fault without this might make user think the device wasn't created
+    if(!registrationError){
+      response.status(HTTP_STATUS_FOR_CREATED).send({
+        message: `created initial table for device ID ${String(deviceID)}.`,
+        warnings: warnings,
+        deviceID: deviceID,
+      });
+    }else response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+  }
+  finally{
+    if(sqlConnection)
+      sqlConnectionPool.releaseConnection(sqlConnection);
   }
 }
 
-export async function registerCompositeDevice(request, response, sqlConnectionPool, registerDeviceLogic){
-  /*
-  input:
-  - Authorization: user session token, uuid-hex, str[36]
-  - {
-    __deviceName: str[1-32],
-    __deviceSecret: str[0-32],
-    __deviceViewingSecret: str[0-32],
-    
-    device0ID: int,
-    device0ViewingSecret: str[0-32],
-    device1ID: int,
-    device1ViewingSecret: str[0-32],
-    
-    device0ConditionField: str[1-32],
-    device1ConditionField: str[1-32],
-    mergeUsingCondition: enum int{
-      0 = equal
-      1 = within range
-    },
-    mergeConditionArgument: null, float
-  }
-  
-  Returns:
-  - HTTP status 201 with {
-    message: str
-    deviceID: int
-  } if successful
-  - HTTP status 400 with .error:str, if request is invalid
-  - HTTP status 401 if user session token is invalid
-  - HTTP status 500 for undocumented server errors
-  */
-  
+export async function registerCompositeDevice(request, response){  
+  if((typeof request.body) !== "object")
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Response body must be JSON."});
+
   if((typeof request.body.__deviceSecret) !== "string")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceSecret not string type."});
   if((typeof request.body.__deviceViewingSecret) !== "string")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceViewingSecret not string type."});
   if((typeof request.body.__deviceName) !== "string")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "__deviceName not string type."});    
-  
+
+  const partialParameterCheckError = checkPartialCompositeDeviceViewParameters(request.body);
+  if(partialParameterCheckError)
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send(
+      createCompositeDeviceViewErrorStr[partialParameterCheckError]
+    );
+
   const deviceSecretTrimmed = request.body.__deviceSecret
     .substring(FIRST_CHARACTER, MAX_DEVICE_SECRET_CHARACTERS)
     .trim()
@@ -206,60 +167,73 @@ export async function registerCompositeDevice(request, response, sqlConnectionPo
     });
   }
  
-  const sqlConnection = await honeycombDBConnectionPool.getConnection();
-  await sqlConnection.beginTransaction();
+  let sqlConnection;
   try{
-    const deviceID = await registerDeviceLogic({
-      sqlConnection, 
-      deviceSecret: deviceSecretTrimmed, 
-      viewingSecret: deviceViewingSecretTrimmed, 
-      deviceName: deviceNameTrimmed, 
-      isCompositeDevice: true, 
-      ownerUserID: request.cachedLogin.userID
-    });
-    const createViewError = await createCompositeDeviceViewLogic(sqlConnection, request.body, deviceID);
-    if(createViewError){
+    sqlConnection = await sqlConnectionPool.getConnection();
+    await sqlConnection.beginTransaction();
+
+    let registrationError = false;
+    let deviceID;
+    try{
+      deviceID = await registerDeviceLogic({
+        sqlConnection,
+        deviceSecret: deviceSecretTrimmed,
+        viewingSecret: deviceViewingSecretTrimmed,
+        deviceName: deviceNameTrimmed,
+        isCompositeDevice: true,
+        ownerUserID: request.cachedLogin.userID
+      });
+      const createViewError = await createCompositeDeviceViewLogic(sqlConnection, request.body, deviceID);
+      if(createViewError){
+        await sqlConnection.rollback();
+        registrationError = true;
+        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+          error: createCompositeDeviceViewErrorStr[createViewError]
+        });
+      }
+
+      await sqlConnection.commit();
+    }catch(err){
+      registrationError = true;
       await sqlConnection.rollback();
-      honeycombDBConnectionPool.releaseConnection(sqlConnection);          
-      
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
-        error: createCompositeDeviceViewErrorStr[createViewError]
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+      console.log(err);
+    }
+
+    if(!registrationError){
+      response.status(HTTP_STATUS_FOR_CREATED).send({
+        message: `created view for composite device ID ${String(deviceID)}.`,
+        deviceID: deviceID,
       });
     }
-    
-    await sqlConnection.commit();
-    honeycombDBConnectionPool.releaseConnection(sqlConnection);
-    response.status(HTTP_STATUS_FOR_CREATED).send({
-      message: `created view for composite device ID ${String(deviceID)}.`,
-      deviceID: deviceID,
-    });
   }catch(err){
-    await sqlConnection.rollback();
-    honeycombDBConnectionPool.releaseConnection(sqlConnection);
-    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
     console.log(err);
+    //Try sending again, a single fault without this might make user think the device wasn't created
+    if(!registrationError){
+      response.status(HTTP_STATUS_FOR_CREATED).send({
+        message: `created view for composite device ID ${String(deviceID)}.`,
+        deviceID: deviceID,
+      });
+    }else response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+  }
+  finally{
+    if(sqlConnection)
+      sqlConnectionPool.releaseConnection(sqlConnection);
   }
 }
 
 export async function getDevice(request, response){
   try{
     const [deviceNameResult, tableResult] = await Promise.all([
-      honeycombDBConnectionPool.execute(
-        "SELECT deviceName FROM Device WHERE deviceID = ?", [request.deviceIDInt]
+      sqlConnectionPool.execute(
+        "SELECT deviceName FROM Honeycomb.Device WHERE deviceID = ?", [request.deviceIDInt]
       ),
-      honeycombDBConnectionPool.execute(
-        `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}`
+      sqlConnectionPool.execute(
+        `SELECT * FROM Honeycomb.${getDeviceTableNameFromID(request.deviceIDStr)}`
       ),
     ]);
     
     const QUERY_RESULT = 0;
-    if(tableResult.length !== 0){
-      webSocketRouterToMCU.putToDevice(JSON.stringify({
-          __messageType: "patch", ...(tableResult[0].at(-1))
-        }), 
-        request.deviceIDInt
-      );
-    }
     response.send({
       deviceName: deviceNameResult[QUERY_RESULT][0].deviceName,
       table: tableResult[QUERY_RESULT],
@@ -270,28 +244,10 @@ export async function getDevice(request, response){
   }
 }
 
-export async function getUserDevicePreviews(request, response, honeycombDBConnectionPool){
-  /*
-  Input:
-  - Authorization: userSessionToken, uuidv7-hex
-  
-  Returns:
-  - {
-    devices: [
-      {
-        deviceID: int(64),
-        deviceName: str[1-32],
-        isCompositeDevice: int(1)
-      },
-      ...
-    ]
-  }, with HTTP status 200
-  - HTTP status 401 if session token from Authorization is invalid
-  - HTTP status 500 for undocumented server errors
-  */
+export async function getUserDevicePreviews(request, response){
   try{
-    const [devices] = await honeycombDBConnectionPool.execute(
-      "SELECT deviceID, deviceName, isCompositeDevice FROM Device WHERE ownerUserID = ?", [request.cachedLogin.userID]
+    const [devices] = await sqlConnectionPool.execute(
+      "SELECT deviceID, deviceName, isCompositeDevice, ownerUserID FROM Honeycomb.Device WHERE ownerUserID = ?", [request.cachedLogin.userID]
     );
     response.send({devices: devices});
   }catch(err){
@@ -306,8 +262,8 @@ export async function checkUserOwnsDevice(request, response){
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "userID must be a positive integer."});
 
   try{
-    const [matchingDevice] = await honeycombDBConnectionPool.execute(
-      "SELECT deviceID FROM Device WHERE deviceID = ? AND ownerUserID = ?",
+    const [matchingDevice] = await sqlConnectionPool.execute(
+      "SELECT deviceID FROM Honeycomb.Device WHERE deviceID = ? AND ownerUserID = ?",
       [request.deviceIDInt, userID]
     );
     response.send({isOwner: matchingDevice.length !== 0});
@@ -319,9 +275,16 @@ export async function checkUserOwnsDevice(request, response){
 
 export async function getLatestDatapoint(request, response){
   try{
-    const [latestDatapoint] = await honeycombDBConnectionPool.execute(
-      `SELECT * FROM ${getDeviceTableNameFromID(request.deviceIDStr)}
-       ORDER BY __datapointIndex DESC LIMIT 1`
+    const [device] = await sqlConnectionPool.execute(
+      "SELECT isCompositeDevice FROM Honeycomb.Device WHERE deviceID=?", [request.deviceIDInt]
+    );
+    if(device.length === 0)
+      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Device with given ID not found."});
+
+    const datapointIndex = device[0].isCompositeDevice ? "1___datapointIndex" : "__datapointIndex";
+    const [latestDatapoint] = await sqlConnectionPool.execute(
+      `SELECT * FROM Honeycomb.${getDeviceTableNameFromID(request.deviceIDStr)}
+       ORDER BY ${datapointIndex} DESC LIMIT 1`
     );
 
     response.send({datapoint: latestDatapoint[0] || null});
@@ -333,7 +296,7 @@ export async function getLatestDatapoint(request, response){
 
 export async function getDeviceTableColumns(request, response){
   try{
-    const [columns] = await honeycombDBConnectionPool.execute(
+    const [columns] = await sqlConnectionPool.execute(
       "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'Honeycomb' AND TABLE_NAME = ?",
       [getDeviceTableNameFromID(request.deviceIDStr)]
     );

@@ -21,6 +21,7 @@ export async function registerDeviceLogic({
   isCompositeDevice,
   ownerUserID,
 }){
+  //Raises MySQL exceptions
   const SALT_SIZE_BYTES = 16;
   const salt = randomBytes(SALT_SIZE_BYTES).toString('hex');
   const storingDeviceSecret = saltAndRehash(deviceSecret, salt);
@@ -95,20 +96,20 @@ export async function addDatapointLogic(
   tableName, 
   sqlConnectionPool, 
   deviceID,
-){  
-  const [deviceQuery] = await sqlConnectionPool.execute(
-    "SELECT isCompositeDevice FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]
-  );
-  const cannotAddToSQLView = deviceQuery[0].isCompositeDevice;
+){
+  //Raises SQL exceptions
+  const [deviceQuery, columnQuery] = await Promise.all([
+    sqlConnectionPool.execute("SELECT isCompositeDevice FROM Honeycomb.Device WHERE deviceID = ?", [deviceID]),
+    sqlConnectionPool.execute(`SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = '${tableName}'`),
+  ]);
+  
+  const QUERY = 0;
+  const cannotAddToSQLView = deviceQuery[QUERY][0].isCompositeDevice;
   if(cannotAddToSQLView) return false;
-
-  const [queryResult] = await sqlConnectionPool.execute(
-    `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = '${tableName}'`
-  );
   
   const columns = [];
   const correspondingValues = [];
-  for(const e of queryResult){
+  for(const e of columnQuery[QUERY]){
     const columnName = e.COLUMN_NAME;
     const correspondingValue = objectFromResponse[columnName];
     const fillColumnWithSQLNull = (correspondingValue === undefined) || (correspondingValue === null);
@@ -157,20 +158,16 @@ export const createCompositeDeviceViewErrorStr = {
   9: "Specified merging condition columns of device 0 and device 1 have type mismatch",
 };
 
-export async function createCompositeDeviceViewLogic(
-  sqlConnection,
-  objectFromRequest,
-  deviceID,
-){
-  if(typeof(objectFromRequest.device0ID) !== "number")
-    return createCompositeDeviceViewError.DEVICE0ID;
-  if(typeof(objectFromRequest.device1ID) !== "number")
-    return createCompositeDeviceViewError.DEVICE1ID;
-  
+export function checkPartialCompositeDeviceViewParameters(objectFromRequest){
   if(!Number.isInteger(objectFromRequest.device0ID))
     return createCompositeDeviceViewError.DEVICE0ID;
+  if(objectFromRequest.device0ID < 0)
+    return createCompositeDeviceViewError.DEVICE0ID;
+  
   if(!Number.isInteger(objectFromRequest.device1ID))
     return createCompositeDeviceViewError.DEVICE1ID;
+  if(objectFromRequest.device1ID < 0)
+    return createCompositeDeviceViewError.DEVICE0ID;
   
   if(typeof(objectFromRequest.device0ViewingSecret) !== "string")
     return createCompositeDeviceViewError.DEVICE0_VIEWING_SECRET;
@@ -182,17 +179,30 @@ export async function createCompositeDeviceViewLogic(
   if(typeof(objectFromRequest.device1ConditionField) !== "string")
     return createCompositeDeviceViewError.DEVICE1_CONDITION_FIELD;
   
-  if(typeof(objectFromRequest.mergeUsingCondition) !== "number")
+  if(!Number.isInteger(objectFromRequest.mergeUsingCondition))
     return createCompositeDeviceViewError.MERGING_CONDITION;
+  if(objectFromRequest.mergeUsingCondition < 0)
+    return createCompositeDeviceViewError.DEVICE0ID; 
   
-  const device0AuthError = await deviceViewingSecretAuthentication(
-    objectFromRequest.device0ID, objectFromRequest.device0ViewingSecret, sqlConnection
-  );
+  return createCompositeDeviceViewError.OK;
+}
+
+export async function createCompositeDeviceViewLogic(
+  sqlConnection,
+  objectFromRequest,
+  deviceID,
+){
+  //Raises MySQL exceptions
+  const [device0AuthError, device1AuthError] = await Promise.all([
+    deviceViewingSecretAuthentication(
+      objectFromRequest.device0ID, objectFromRequest.device0ViewingSecret, sqlConnection
+    ),
+    deviceViewingSecretAuthentication(
+      objectFromRequest.device1ID, objectFromRequest.device1ViewingSecret, sqlConnection
+    ),
+  ]);
+
   if(device0AuthError) return createCompositeDeviceViewError.DEVICE0_VIEWING_SECRET;
-  
-  const device1AuthError = await deviceViewingSecretAuthentication(
-    objectFromRequest.device1ID, objectFromRequest.device1ViewingSecret, sqlConnection
-  );
   if(device1AuthError) return createCompositeDeviceViewError.DEVICE1_VIEWING_SECRET;
   
   const device0TableName = getDeviceTableNameFromID(objectFromRequest.device0ID);
@@ -201,22 +211,22 @@ export async function createCompositeDeviceViewLogic(
   const trimmedDevice0ConditionField = objectFromRequest.device0ConditionField.trim();
   const trimmedDevice1ConditionField = objectFromRequest.device1ConditionField.trim();
   
-  const [device0Columns] = await sqlConnection.execute(
-    "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", 
-    [device0TableName]
-  );
-  const [device1Columns] = await sqlConnection.execute(
-    "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", 
-    [device1TableName]
-  );
+  const QUERY = 0;
+  const [device0Columns, device1Columns] = await Promise.all([
+    sqlConnection.execute(
+      "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", [device0TableName]
+    ),
+    sqlConnection.execute(
+      "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME = ?", [device1TableName])
+  ]);
   
-  const matchingDevice0ConditionColumns = device0Columns.filter((element) => {
-      return element.COLUMN_NAME === trimmedDevice0ConditionField;
+  const matchingDevice0ConditionColumns = device0Columns[QUERY].filter((element) => {
+    return element.COLUMN_NAME === trimmedDevice0ConditionField;
   });
-  const matchingDevice1ConditionColumns = device1Columns.filter((element) => {
-      return element.COLUMN_NAME === trimmedDevice1ConditionField;
+  const matchingDevice1ConditionColumns = device1Columns[QUERY].filter((element) => {
+    return element.COLUMN_NAME === trimmedDevice1ConditionField;
   });  
-  
+
   const invalidDevice0Column = matchingDevice0ConditionColumns.length === 0;
   if(invalidDevice0Column) return createCompositeDeviceViewError.DEVICE0_CONDITION_FIELD;
   const invalidDevice1Column = matchingDevice1ConditionColumns.length === 0;  
@@ -225,11 +235,11 @@ export async function createCompositeDeviceViewLogic(
   const columnNotSameType = matchingDevice0ConditionColumns[0].DATA_TYPE !== matchingDevice1ConditionColumns[0].DATA_TYPE;
   if(columnNotSameType) return createCompositeDeviceView.DATATYPE_MISMATCH;
   
-  for(let i = 0; i < device0Columns.length; i++)
-    device0Columns[i] = `${device0TableName}.${device0Columns[i].COLUMN_NAME} AS ${objectFromRequest.device0ID}_${device0Columns[i].COLUMN_NAME}`
-  for(let i = 0; i < device1Columns.length; i++)
-    device1Columns[i] = `${device1TableName}.${device1Columns[i].COLUMN_NAME} AS ${objectFromRequest.device1ID}_${device1Columns[i].COLUMN_NAME}`
-  const columnsWithDevicePrefix = device0Columns.concat(device1Columns);
+  for(let i = 0; i < device0Columns[QUERY].length; i++)
+    device0Columns[QUERY][i] = `${device0TableName}.${device0Columns[QUERY][i].COLUMN_NAME} AS ${objectFromRequest.device0ID}_${device0Columns[QUERY][i].COLUMN_NAME}`
+  for(let i = 0; i < device1Columns[QUERY].length; i++)
+    device1Columns[QUERY][i] = `${device1TableName}.${device1Columns[QUERY][i].COLUMN_NAME} AS ${objectFromRequest.device1ID}_${device1Columns[QUERY][i].COLUMN_NAME}`
+  const columnsWithDevicePrefix = device0Columns[QUERY].concat(device1Columns[QUERY]);
   const columnsWithDevicePrefixStr = columnsWithDevicePrefix.join(',');
   
   const viewWithoutCondition = `CREATE VIEW Honeycomb.${getDeviceTableNameFromID(deviceID)} AS SELECT ${columnsWithDevicePrefixStr} FROM Honeycomb.${device0TableName}, Honeycomb.${device1TableName}`;
@@ -238,13 +248,10 @@ export async function createCompositeDeviceViewLogic(
   
   if(objectFromRequest.mergeUsingCondition === MERGE_ON_EQUAL_VALUES){
     const viewWithCondition = `${viewWithoutCondition} WHERE Honeycomb.${device0TableName}.${trimmedDevice0ConditionField} = Honeycomb.${device1TableName}.${trimmedDevice1ConditionField}`;
-    sqlConnection.execute(viewWithCondition);
+    await sqlConnection.execute(viewWithCondition);
     return createCompositeDeviceViewError.OK;
   }
-  
   if(objectFromRequest.mergeUsingCondition === MERGE_ON_VALUE_WITHIN_RANGE){
-    if(typeof(objectFromRequest.mergeConditionArgument) !== "number")
-      return createCompositeDeviceViewError.MERGING_CONDITION_ARGUMENT;
     if(Number.isNaN(objectFromRequest.mergeConditionArgument))
       return createCompositeDeviceViewError.MERGING_CONDITION_ARGUMENT;
     

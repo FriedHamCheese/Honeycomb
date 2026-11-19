@@ -19,6 +19,7 @@ import{
   USE_INTER_SERVICE_CALL_MOCK,
 } from './config.js';
 
+//Should have some length validation tests
 export function saltAndRehash(secret, saltStr){
   const sha512Hash = createHash('sha512');
   sha512Hash.update(secret + saltStr);
@@ -92,7 +93,7 @@ export async function deviceSecretAuthentication(deviceSecret, deviceID){
 export async function deviceSecretAuthenticationMiddleware(request, response, nextRouter){
   /*
   Input:
-  - devicesecret: device secret, str[1-32]
+  - devicesecret: device secret, str[0-32], truncated if exceeded
   
   Returns:
   - HTTP status 401 with .error: str; if devicesecret not string type or invalid combination with request.deviceIDInt
@@ -138,18 +139,23 @@ export async function getCachedLogin(userToken){
     if (USE_INTER_SERVICE_CALL_MOCK) {
       // The test fixture contains one user (Jane Doe, ID 1); any supplied
       // syntactically valid token represents that fixture user in mock mode.
-      cachedLogin = {userID: 1, email: 'jane.doe@example.com', token: userToken};
+      switch(userToken){
+        case "1b50cb86-0f83-45ad-a3f4-99e2a664ff5e":
+          cachedLogin = {userID: 1, email: 'jane.doe@example.com', token: "1b50cb86-0f83-45ad-a3f4-99e2a664ff5e"};
+          break;
+      }
     } else {
-      const userAuthResponse = await fetch(`${AUTH_SERVICE_DOMAIN}/apiv1/user`, {
+      const userAuthResponse = await fetch(`${process.env.AUTH_SERVICE_DOMAIN}/apiv1/user`, {
         headers: {Authorization: userToken},
         keepalive: true,
       });
       cachedLogin = userAuthResponse.ok ? await userAuthResponse.json() : null;
     }
-    cachedLoginByToken.set(userToken, {
-      cachedLogin,
-      expiresAt: Date.now() + CACHED_LOGIN_TTL_MS,
-    });
+    if(cachedLogin)
+      cachedLoginByToken.set(userToken, {
+        cachedLogin,
+        expiresAt: Date.now() + CACHED_LOGIN_TTL_MS,
+      });
     return cachedLogin;
   } catch {
     return null;
