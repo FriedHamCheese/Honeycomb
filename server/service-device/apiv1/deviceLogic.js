@@ -1,15 +1,11 @@
 import {
-  parseBodyToSQLTableAttributes,
-} from "../utils.js";
-
-import {
   saltAndRehash,
   deviceViewingSecretAuthentication,
   secretAuthenticationError,
 } from '../auth.js';
 
 import {randomBytes} from 'node:crypto';
-import {MAX_COLUMN_NAME_CHARACTERS} from '../../../constraints.js';
+import {MAX_COLUMN_NAME_CHARACTERS, MAX_TYPE_CHARACTERS} from '../../../constraints.js';
 
 const MIN_COLUMN_NAME_CHARACTERS = 1;
 
@@ -33,33 +29,6 @@ export async function registerDeviceLogic({
   );
   const deviceID = insertionResult.insertId;
   return deviceID;
-}
-
-export async function createInitialDeviceTable(
-  objectFromRequest, 
-  deviceIDStr, 
-  sqlConnection
-){
-  /*
-  Exceptions: exceptions from SQL command execution.
-  Returns a string consisting of warnings from parsing client request. 
-  If there are no warnings, empty string is returned.
-  */
-  
-  delete objectFromRequest.__deviceName;
-  delete objectFromRequest.__deviceSecret;
-  delete objectFromRequest.__deviceViewingSecret;
-  
-  const {sqlTableAttributes, warnings} = parseBodyToSQLTableAttributes(
-    objectFromRequest,
-    MIN_COLUMN_NAME_CHARACTERS,
-    MAX_COLUMN_NAME_CHARACTERS,
-  );
-  
-  const finalTableAttributes = "__datapointIndex INT(64) PRIMARY KEY AUTO_INCREMENT, " + sqlTableAttributes;
-  const createTableQuery = `CREATE TABLE Honeycomb.${getDeviceTableNameFromID(deviceIDStr)} (${finalTableAttributes});`; 
-  await sqlConnection.execute(createTableQuery);
-  return warnings;
 }
 
 export async function deleteDeviceLogic(
@@ -266,4 +235,53 @@ export async function createCompositeDeviceViewLogic(
 
 export function getDeviceTableNameFromID(deviceIDStr){
   return `Device${deviceIDStr}_Table`;
+}
+
+
+export const supportedDeviceDatatypes = [
+  {requestedType: "int8", sqlType: "TINYINT"},
+  {requestedType: "int16", sqlType: "SMALLINT"},
+  {requestedType: "int32", sqlType: "INT"},
+  {requestedType: "int64", sqlType: "BIGINT"},
+  {requestedType: "float32", sqlType: "FLOAT(24)"},
+  {requestedType: "float64", sqlType: "FLOAT(53)"},
+  {requestedType: "string", sqlType: "VARCHAR", customSizeBoundary: {min: 1, max: 255}},
+];
+
+export function parseBodyToSQLTableAttributes(objectFromBody, minColumnNameCharacters, maxColumnNameCharacters){
+  const attributes = [];
+  for (const [columnName, typeName] of Object.entries(objectFromBody)) {
+    const sanitisedColumnName = columnName.trim();
+    const columnNamePureAlphanumeric = /^[a-zA-Z0-9_]+$/.test(sanitisedColumnName);
+    if (!columnNamePureAlphanumeric 
+      || (sanitisedColumnName.length < minColumnNameCharacters)
+      || (sanitisedColumnName.length > maxColumnNameCharacters)
+    )
+      return {error: `Invalid column name ${columnName}.`};
+    
+    if (typeof typeName !== 'string')
+      return {error: `Type of ${sanitisedColumnName} must be a string.`};
+    
+    const sanitisedTypeName = typeName.substring(0, MAX_TYPE_CHARACTERS).trim();
+    const typenameValid = /^[a-zA-Z0-9_]+(?:\[\d+\])?$/.test(sanitisedTypeName);
+    if (!typenameValid)
+      return {error: `Invalid typename ${sanitisedTypeName}.`};
+    
+    const sizedString = /^string\[(\d+)\]$/.exec(sanitisedTypeName);
+    const requestedType = sizedString ? 'string' : sanitisedTypeName;
+    const typeDefinition = supportedDeviceDatatypes.find(type => type.requestedType === requestedType);
+    if (!typeDefinition)
+      return {error: `Unsupported type ${sanitisedTypeName} for ${sanitisedColumnName}.`};
+
+    let sqlType = typeDefinition.sqlType;
+    if (sizedString){
+      const size = Number(sizedString[1]);
+      const {min, max} = typeDefinition.customSizeBoundary;
+      if (size < min || size > max)
+        return {error: `String size for ${sanitisedColumnName} must be between ${min} and ${max}.`};
+      sqlType += `(${size})`;
+    }
+    attributes.push(`${sanitisedColumnName} ${sqlType}`);
+  }
+  return {sqlTableAttributes: attributes.join(', ')};
 }

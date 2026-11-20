@@ -11,6 +11,10 @@ import {
 } from './deviceController.js';
 
 import {
+  supportedDeviceDatatypes
+} from './deviceLogic.js';
+
+import {
   deviceIDParameterValid,
   deviceSecretAuthenticationMiddleware,
   checkCachedLoginMiddleware,
@@ -23,19 +27,19 @@ import {HTTP_STATUS_FOR_OK} from '../../../constraints.js';
 export const deviceRouter = express.Router();
 
 deviceRouter.get(
+  "/test/:deviceID/owner",
+  deviceIDParameterValid,
+  checkCachedLoginIsDeviceOwnerMiddleware,
+  (request, response) => response.sendStatus(HTTP_STATUS_FOR_OK)
+);
+
+deviceRouter.get(
   "/test/id/:deviceID",
   deviceIDParameterValid,
   (request, response) => response.send({
     deviceIDInt: request.deviceIDInt,
     deviceIDStr: request.deviceIDStr,
   })
-);
-
-deviceRouter.get(
-  "/test/:deviceID/owner",
-  deviceIDParameterValid,
-  checkCachedLoginIsDeviceOwnerMiddleware,
-  (request, response) => response.sendStatus(HTTP_STATUS_FOR_OK)
 );
 
 deviceRouter.post(
@@ -58,6 +62,17 @@ deviceRouter.post(
   addDatapoint
 );
 
+deviceRouter.get(
+  /*
+  Returns:
+  - HTTP status 200 with deviceLogic.supportedDeviceDatatypes
+  */
+  "/datatypes",
+  (request, response) => {
+    response.send(supportedDeviceDatatypes);
+  }
+)
+
 deviceRouter.post(
   /*
   Input:
@@ -69,6 +84,8 @@ deviceRouter.post(
     (attribute: type),
     ...
   }
+  See deviceLogic: supportedDeviceDatatypes.requestedTypes for available types.
+  string type requires to be in "string[size]" to be valid, where size is from 0 to 255.
   
   Returns:
   - HTTP status 201 with {
@@ -159,7 +176,7 @@ deviceRouter.get(
   */
   "/webSocketURL",
   //Add inter-service check here
-  async (request, response) => {
+  (request, response) => {
     try{
       response.send({
         domain: process.env.WEBSOCKET_DOMAIN,

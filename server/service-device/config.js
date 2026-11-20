@@ -8,4 +8,4 @@ export const SERVICE_ENDPOINTS = {
 export const USER_ROUTE_PREFIXES = ['/apiv1/user', '/apiv1/dashboard'];
 export const DEVICE_ROUTE_PREFIX = '/apiv1/device';
 
-export const USE_INTER_SERVICE_CALL_MOCK = true;
+export const USE_INTER_SERVICE_CALL_MOCK = false;

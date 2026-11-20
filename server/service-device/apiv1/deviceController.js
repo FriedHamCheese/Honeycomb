@@ -1,5 +1,4 @@
 import {
-  createInitialDeviceTable, 
   registerDeviceLogic,
   addDatapointLogic,
   deleteDeviceLogic,
@@ -7,6 +6,7 @@ import {
   createCompositeDeviceViewError,
   createCompositeDeviceViewErrorStr,
   getDeviceTableNameFromID,
+  parseBodyToSQLTableAttributes,
   checkPartialCompositeDeviceViewParameters,
 } from './deviceLogic.js';
 
@@ -19,6 +19,8 @@ import {
   MAX_DEVICE_SECRET_CHARACTERS,
   MIN_DEVICE_NAME_CHARACTERS,
   MAX_DEVICE_NAME_CHARACTERS,
+  MIN_COLUMN_NAME_CHARACTERS,
+  MAX_COLUMN_NAME_CHARACTERS,
   MAX_DEVICE_VIEWING_SECRET_CHARACTERS,
   
   HTTP_STATUS_FOR_OK,
@@ -27,8 +29,6 @@ import {
   HTTP_STATUS_FOR_UNAUTHORIZED,
   HTTP_STATUS_FOR_SERVER_ERROR,
 } from '../../../constraints.js';
-
-import {parseBodyToSQLTableAttributes} from "../utils.js";
 
 import express from "express";
 export const deviceRouter = express.Router();
@@ -81,6 +81,13 @@ export async function registerDevice(request, response){
       error: "Device name requires at least 1 character."
     });
   }
+
+  delete request.body.__deviceName;
+  delete request.body.__deviceSecret;
+  delete request.body.__deviceViewingSecret;
+  const parsedSQLAttributes = parseBodyToSQLTableAttributes(request.body, MIN_COLUMN_NAME_CHARACTERS, MAX_COLUMN_NAME_CHARACTERS);
+  if(parsedSQLAttributes.error)
+    return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: parsedSQLAttributes.error});
  
   let sqlConnection;
   let deviceID, warnings;
@@ -98,7 +105,11 @@ export async function registerDevice(request, response){
         isCompositeDevice: false, 
         ownerUserID: request.cachedLogin.userID
       });
-      warnings = await createInitialDeviceTable(request.body, String(deviceID), sqlConnection);
+      
+      const finalTableAttributes = "__datapointIndex BIGINT PRIMARY KEY AUTO_INCREMENT, " + parsedSQLAttributes.sqlTableAttributes;
+      const createTableQuery = `CREATE TABLE Honeycomb.${getDeviceTableNameFromID(deviceID)} (${finalTableAttributes});`; 
+      await sqlConnection.execute(createTableQuery);
+      
       await sqlConnection.commit();
     }catch(err){
       registrationError = true;
