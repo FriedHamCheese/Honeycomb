@@ -1,7 +1,3 @@
-# Honeycomb
-A project aiming to recreate Arduino Cloud ecosystem to serve as learning area for backend and database development, 
-and microcontroller networking.
-
 # Target Features/Implementations
 - [x]  Device creation with custom SQL tables via API request
 - [x]  Datapoint storage
