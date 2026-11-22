@@ -19,7 +19,7 @@ import http from 'node:http';
 
 const app = express();
 app.use(express.json({limit: SERVICE_MAX_REQUEST_BODY_BYTES}));
-app.use(cors({origin: process.env.DEVICE_SERVICE_CORS_ORIGINS.split(',')}));
+app.use(cors());
 
 const apiRouter = express.Router();
 

@@ -191,7 +191,8 @@ export async function toMCUOnMessage(
     - couldn't parse message as JSON. Note: make sure C null terminator is not in the message.
     - npm ws gives its data as other type than Buffer
   - {__messageType: "auth", ...} see handleAuthMessage.
-  - {__messageType: "pingerr"}: the device is not authenticated
+  - {__messageType: "patcherr", error:str} for errors during patch from MCU, see handlePatchMessage.
+  - {__messageType: "pong"} matching received {__messageType: "ping"}
   
   Does not raise exceptions, outputs to clientWebSocket and console.
   */
@@ -239,7 +240,9 @@ export async function toMCUOnMessage(
         break;
       };
       case("auth"):{
-        await handleAuthMessage(objectFromRequest, connection, clientWebSocket, removeStaleAuthenticatedConnections, addAuthenticatedConnection);
+        await handleAuthMessage(
+          objectFromRequest, connection, clientWebSocket, removeStaleAuthenticatedConnections, addAuthenticatedConnection
+        );
         break;
       }
       case("patch"):{
@@ -339,14 +342,14 @@ async function handlePatchMessage(objectFromRequest, connection, clientWebSocket
     ignored. Each matching non-null key is inserted as a new datapoint row.
 
     Writes to connection:
-    - {__messageType: "error", error: string}: unauthenticated patch or a
+    - {__messageType: "patcherr", error: string}: unauthenticated patch or a
       patch targeting a composite device.
 
     Returns nothing after a successful patch.
   */
   if(!connection)
     return clientWebSocket.send(JSON.stringify({
-      __messageType: "error", error: "patch message requires authentication beforehand."
+      __messageType: "patcherr", error: "patch message requires authentication beforehand."
     }));
 
   const deviceID = connection.getDeviceID();
@@ -358,6 +361,6 @@ async function handlePatchMessage(objectFromRequest, connection, clientWebSocket
   ));
   if(isCompositeDevice)
     return clientWebSocket.send(JSON.stringify({
-      __messageType: "error", error: "Cannot add datapoint to composite device."
+      __messageType: "patcherr", error: "Cannot add datapoint to composite device."
     }));
 }
