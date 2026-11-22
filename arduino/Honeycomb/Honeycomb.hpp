@@ -1,14 +1,28 @@
 #ifndef HONEYCOMB_HPP
 #define HONEYCOMB_HPP
 
-#if defined(ESP8266) || defined(ARDUINO_ARCH_ESP8266)
-#include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
-#endif
+#include "ArduinoJson.h"
 
-#include <ArduinoJson.h>
-#include <ArduinoHttpClient.h>
+static const int HTTP_SUCCESS =0;
+// The end of the headers has been reached.  This consumes the '\n'
+// Could not connect to the server
+static const int HTTP_ERROR_CONNECTION_FAILED =-1;
+// This call was made when the HttpClient class wasn't expecting it
+// to be called.  Usually indicates your code is using the class
+// incorrectly
+static const int HTTP_ERROR_API =-2;
+// Spent too long waiting for a reply
+static const int HTTP_ERROR_TIMED_OUT =-3;
+// The response from the server is invalid, is it definitely an HTTP
+// server?
+static const int HTTP_ERROR_INVALID_RESPONSE =-4;
+
+static const int TYPE_CONTINUATION     = 0x0;
+static const int TYPE_TEXT             = 0x1;
+static const int TYPE_BINARY           = 0x2;
+static const int TYPE_CONNECTION_CLOSE = 0x8;
+static const int TYPE_PING             = 0x9;
+static const int TYPE_PONG             = 0xa;
 
 inline bool periodicWait(
   unsigned long& waitedMs, unsigned long targetWaitMs, unsigned long periodMs, void(*waitMs)(unsigned long)
@@ -76,6 +90,7 @@ enum class HoneycombError : uint8_t{
   unknown
 };
 
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
 class HoneycombClient{
   public:
   HoneycombClient(
@@ -84,12 +99,14 @@ class HoneycombClient{
     uint16_t maxIncomingBytes, 
     unsigned long maxMsBeforeTimeout,
     uint64_t deviceID,
-    const char* deviceSecret
+    const char* deviceSecret,
+    unsigned long msSinceStartup,
+    SerialInterface& serial
   );
-  HoneycombError begin();
+  HoneycombError begin(unsigned long msSinceStartup);
   HoneycombError authenticate();
   HoneycombError pingServer();
-  HoneycombError readIncomingMessages();
+  HoneycombError readIncomingMessages(unsigned long msSinceStartup);
   HoneycombError patchDatapoint(JsonObject jsonRef);
 
   Optional<bool, JsonDocument>* variablesFromServer;
@@ -99,10 +116,11 @@ class HoneycombClient{
   private:
   //Buffer is not multithreading-proof if writes or reads are executed simultaneously
   char scratchpadBuffer[scratchpadBufferBytes];
-  WiFiClient httpWiFiClient;
-  HttpClient httpClient;
-  WiFiClient webSocketWiFiClient;
-  WebSocketClient webSocketConnection;
+  NetworkInterface httpWiFiClient;
+  HttpClientInterface httpClient;
+  NetworkInterface webSocketWiFiClient;
+  WebSocketClientInterface webSocketConnection;
+  SerialInterface& serial;
   const char* deviceSecret;
   uint64_t deviceID;
   unsigned long millisLastServerMessage;
@@ -123,5 +141,7 @@ class HoneycombClient{
 
 HoneycombError deserializationErrorToHoneycombError(const DeserializationError error);
 HoneycombError httpErrorToHoneycombError(int error);
+
+#include "Honeycomb.tpp"
 
 #endif

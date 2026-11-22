@@ -1,22 +1,25 @@
-#include "Honeycomb.hpp"
 #include <stdio.h>
 
-HoneycombClient::HoneycombClient(
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::HoneycombClient(
   const char* serverURL,
   uint16_t serverPort,
   uint16_t maxIncomingBytes, 
   unsigned long maxMsBeforeTimeout,
   uint64_t deviceID, 
-  const char* deviceSecret
+  const char* deviceSecret,
+  unsigned long msSinceStartup,
+  SerialInterface& serial
 )
 : variablesFromServer(nullptr),
   httpWiFiClient(),
   httpClient(httpWiFiClient, serverURL, serverPort),
   webSocketWiFiClient(),
   webSocketConnection(webSocketWiFiClient, serverURL, 80),
+  serial(serial),
   deviceSecret(deviceSecret),
   deviceID(deviceID),
-  millisLastServerMessage(millis()),
+  millisLastServerMessage(msSinceStartup),
   maxMsBeforeTimeout(maxMsBeforeTimeout),
   maxIncomingBytes(maxIncomingBytes),
   connected(false),
@@ -24,7 +27,9 @@ HoneycombClient::HoneycombClient(
 {
 }
 
-HoneycombError HoneycombClient::begin(){
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombError HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::begin(unsigned long msSinceStartup
+){
   this->httpClient.flush();
   this->httpClient.stop();
 
@@ -41,7 +46,7 @@ HoneycombError HoneycombClient::begin(){
   if(this->httpClient.contentLength() > HoneycombClient::scratchpadBufferBytes)
     return HoneycombError::maxSize;
   
-  const String httpResponseBody = this->httpClient.responseBody();
+  const StringT httpResponseBody = this->httpClient.responseBody();
   JsonDocument responseJson;
   const DeserializationError jsonToObjectError = deserializeJson(responseJson, httpResponseBody);
   if(jsonToObjectError != DeserializationError::Ok)
@@ -60,13 +65,14 @@ HoneycombError HoneycombClient::begin(){
   const int connectionBeginError = this->webSocketConnection.begin(responseJson["path"].as<const char*>());
   if(!connectionBeginError){
     this->connected = true;
-    this->millisLastServerMessage = millis();
+    this->millisLastServerMessage = msSinceStartup;
   }
   
   return HoneycombError::httpConnectionFailed;
 }
 
-HoneycombError HoneycombClient::authenticate(){
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombError HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::authenticate(){
   const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT) != 0;
   if(beginMessageError){
     this->connected = false;
@@ -94,10 +100,11 @@ HoneycombError HoneycombClient::authenticate(){
   return HoneycombError::ok;
 }
 
-HoneycombError HoneycombClient::pingServer(){
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombError HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::pingServer(){
   const int beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT);
-  Serial.print("begin: ");
-  Serial.println(beginMessageError);
+  this->serial.print("begin: ");
+  this->serial.println(beginMessageError);
   if(beginMessageError){
     this->connected = false;
     this->authenticated = false;
@@ -108,8 +115,8 @@ HoneycombError HoneycombClient::pingServer(){
   this->webSocketConnection.write((uint8_t*)pingMessage, sizeof(pingMessage) - sizeof('\0'));
 
   const int endMessageError = this->webSocketConnection.endMessage();
-  Serial.print("end: ");
-  Serial.println(endMessageError);
+  this->serial.print("end: ");
+  this->serial.println(endMessageError);
   if(endMessageError){
     this->connected = false;
     this->authenticated = false;
@@ -118,21 +125,23 @@ HoneycombError HoneycombClient::pingServer(){
   return HoneycombError::ok;
 }
 
-HoneycombError HoneycombClient::readIncomingMessages(){
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombError HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::readIncomingMessages(  unsigned long msSinceStartup
+){
   if(not (this->connected)) return HoneycombError::disconnectedWebSocket;
 
   JsonDocument json;
   const size_t messageBytes = this->webSocketConnection.parseMessage();  
   
   if(messageBytes == 0){
-    const bool connectionStale = millis() - this->millisLastServerMessage >= this->maxMsBeforeTimeout;
+    const bool connectionStale = msSinceStartup - this->millisLastServerMessage >= this->maxMsBeforeTimeout;
     if(not connectionStale) return HoneycombError::ok;
     this->connected = false;
     this->authenticated = false;
     return HoneycombError::connectionStale;
   }
   
-  this->millisLastServerMessage = millis();
+  this->millisLastServerMessage = msSinceStartup;
 
   if(messageBytes > this->maxIncomingBytes)
     return HoneycombError::maxSize;
@@ -170,7 +179,8 @@ HoneycombError HoneycombClient::readIncomingMessages(){
   return HoneycombError::unknownReceivedMessageType;
 }
 
-HoneycombError HoneycombClient::patchDatapoint(JsonObject jsonRef){
+template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+HoneycombError HoneycombClient<HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface>::patchDatapoint(JsonObject jsonRef){
   if(not (this->connected)) return HoneycombError::disconnectedWebSocket;
   if(not (this->authenticated)) return HoneycombError::invalidAuthenticateRequest;
 
