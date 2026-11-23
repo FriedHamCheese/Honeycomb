@@ -37,25 +37,25 @@ inline bool periodicWait(
   return false;
 }
 
-template<typename errorCodeT, typename outputT>
-struct Optional{
-  outputT output;
-  errorCodeT errorCode;
+template< typename firstT, typename secondT>
+struct Pair{
+  firstT first;
+  secondT second;
   
-  Optional()
-  : output(), errorCode()
+  Pair()
+  : first(), second()
   {
     
   }
   
-  Optional(errorCodeT errorCode, const outputT& output)
-  : output(output), errorCode(errorCode)
+  Pair(const firstT& first, secondT second)
+  : first(first), second(second)
   {
   }
 
-  Optional<errorCodeT, outputT>& operator=(const Optional<errorCodeT, outputT>& other){
-    this->errorCode = other.errorCode;
-    this->output = other.output;
+  Pair<firstT, secondT>& operator=(const Pair<firstT, secondT>& other){
+    this->first = other.first;
+    this->second = other.second;
     return *this;
   }
 };
@@ -77,41 +77,47 @@ enum class HoneycombError : uint8_t{
   disconnectedWebSocket,
   otherConnectedDeviceHasSameID,
 
-  httpConnectionFailed,
-  httpApiError,
-  httpTimedout,
-  httpInvalidServerResponse,
+  ArduinoHttpClientConnectionFailed,
+  ArduinoHttpClientApiError,
+  ArduinoHttpClientTimedout,
+  ArduinoHttpClientInvalidServerResponse,
+  httpInvalidServerResponseStatus,
+  httpInvalidServerResponseBody,
   httpInvalidRequest,
-
+  
   receivedMessageNotText,
   unknownReceivedMessageType,
   messageFormError,
   invalidAuthenticateRequest,
+  unspecifiedAuthSuccess,
+  notAuthenticated,
   unknown
 };
 
-template <class HttpClientInterface, class WebSocketClientInterface, class NetworkInterface, class StringT, class SerialInterface>
+template <
+  class HttpClientInterface, 
+  class WebSocketClientInterface, 
+  class NetworkInterface, 
+  class StringT, 
+  class SerialInterface,
+  long int scratchpadBufferBytes
+>
 class HoneycombClient{
   public:
   HoneycombClient(
     const char* serverURL,
     uint16_t serverPort, 
-    uint16_t maxIncomingBytes, 
     unsigned long maxMsBeforeTimeout,
     uint64_t deviceID,
     const char* deviceSecret,
     unsigned long msSinceStartup,
     SerialInterface& serial
   );
-  HoneycombError begin(unsigned long msSinceStartup);
+  HoneycombError begin();
   HoneycombError authenticate();
   HoneycombError pingServer();
-  HoneycombError readIncomingMessages(unsigned long msSinceStartup);
+  Pair<HoneycombError, bool> readIncomingMessages(JsonDocument* objectFromServer, unsigned long msSinceStartup);
   HoneycombError patchDatapoint(JsonObject jsonRef);
-
-  Optional<bool, JsonDocument>* variablesFromServer;
-
-  static constexpr uint16_t scratchpadBufferBytes = 512;
 
   private:
   //Buffer is not multithreading-proof if writes or reads are executed simultaneously
@@ -137,10 +143,56 @@ class HoneycombClient{
   inline bool isAuthenticated() const{
     return this->authenticated;
   }
+  inline getMillisLastServerMessage() const noexcept{
+    return this->millisLastServerMessage;
+  }
+  #ifdef HONEYCOMB_USE_DEV_METHODS
+  inline void setConnected(bool connected) noexcept{
+    this->connected = connected;
+  }
+  inline void setAuthenticated(bool authenticated) noexcept{
+    this->authenticated = authenticated;
+  }
+  inline HttpClientInterface& getHttpClient() noexcept{
+    return this->httpClient;
+  }
+  inline WebSocketClientInterface& getWebSocketConnection() noexcept{
+    return this->webSocketConnection;
+  }
+  #endif
 };
 
-HoneycombError deserializationErrorToHoneycombError(const DeserializationError error);
-HoneycombError httpErrorToHoneycombError(int error);
+inline HoneycombError deserializationErrorToHoneycombError(const DeserializationError error) noexcept{
+  if(error == DeserializationError::Ok)
+    return HoneycombError::ok;
+  if(error == DeserializationError::EmptyInput)
+    return HoneycombError::jsonEmptyInput;
+  if(error == DeserializationError::IncompleteInput)
+    return HoneycombError::jsonIncompleteInput;
+  if(error == DeserializationError::InvalidInput)
+    return HoneycombError::jsonInvalidInput;
+  if(error == DeserializationError::NoMemory)
+    return HoneycombError::noMemory;
+  if(error == DeserializationError::TooDeep)
+    return HoneycombError::jsonTooDeep;
+  return HoneycombError::unknown;
+}
+
+inline HoneycombError httpErrorToHoneycombError(int error) noexcept{
+  switch(error){
+    case HTTP_SUCCESS:
+    return HoneycombError::ok;
+    case HTTP_ERROR_CONNECTION_FAILED:
+    return HoneycombError::ArduinoHttpClientConnectionFailed;
+    case HTTP_ERROR_API:
+    return HoneycombError::ArduinoHttpClientApiError;
+    case HTTP_ERROR_TIMED_OUT:
+    return HoneycombError::ArduinoHttpClientTimedout;
+    case HTTP_ERROR_INVALID_RESPONSE:
+    return HoneycombError::ArduinoHttpClientInvalidServerResponse;
+    default: return HoneycombError::unknown;
+  }
+}
 
 #include "Honeycomb.tpp"
 
