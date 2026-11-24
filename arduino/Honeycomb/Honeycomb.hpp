@@ -63,17 +63,15 @@ struct Pair{
 enum class HoneycombError : uint8_t{
   ok,
   maxSize,
-  noOutJsonContainer,
+  noMemory,
   connectionStale, 
  
   jsonEmptyInput,
   jsonIncompleteInput,
   jsonInvalidInput,
-  noMemory,
   jsonTooDeep,
   
   outboundMessageSend,
-
   disconnectedWebSocket,
   otherConnectedDeviceHasSameID,
 
@@ -83,7 +81,6 @@ enum class HoneycombError : uint8_t{
   ArduinoHttpClientInvalidServerResponse,
   httpInvalidServerResponseStatus,
   httpInvalidServerResponseBody,
-  httpInvalidRequest,
   
   receivedMessageNotText,
   unknownReceivedMessageType,

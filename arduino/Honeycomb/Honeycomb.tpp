@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <cstring>
 
 template <
   class HttpClientInterface, 
@@ -96,6 +97,11 @@ HoneycombError HoneycombClient<
 >::authenticate(){
   if(!(this->connected)) return HoneycombError::disconnectedWebSocket;
   
+  JsonDocument json;
+  json["__messageType"] = "auth";
+  json["deviceID"] = this->deviceID;
+  json["deviceSecret"] = this->deviceSecret;
+
   const bool beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT) != 0;
   if(beginMessageError){
     this->connected = false;
@@ -103,10 +109,6 @@ HoneycombError HoneycombClient<
     return HoneycombError::outboundMessageSend;
   }
   
-  JsonDocument json;
-  json["__messageType"] = "auth";
-  json["deviceID"] = this->deviceID;
-  json["deviceSecret"] = this->deviceSecret;
   const size_t stringifiedJSONBytes = serializeJson(json, this->scratchpadBuffer, scratchpadBufferBytes);  
   this->webSocketConnection.write((uint8_t*)(this->scratchpadBuffer), stringifiedJSONBytes);
   
@@ -133,6 +135,11 @@ HoneycombError HoneycombClient<
 >::pingServer(){
   if(!(this->connected)) return HoneycombError::disconnectedWebSocket;
 
+  constexpr char pingMessage[] = "{\"__messageType\":\"ping\"}";
+  constexpr size_t PING_MESSAGE_BUFFER_BYTES = sizeof(pingMessage);
+  if(PING_MESSAGE_BUFFER_BYTES > scratchpadBufferBytes)
+    return HoneycombError::jsonIncompleteInput;
+
   const int beginMessageError = this->webSocketConnection.beginMessage(TYPE_TEXT);
   if(beginMessageError){
     this->connected = false;
@@ -140,9 +147,11 @@ HoneycombError HoneycombClient<
     return HoneycombError::outboundMessageSend;
   }
   
-  const char pingMessage[] = "{\"__messageType\":\"ping\"}";
-  //JavaScript dies froms seeing null terminator, write without it, SerializeJson with Arduino String type does not have it
-  this->webSocketConnection.write((uint8_t*)pingMessage, sizeof(pingMessage) - sizeof('\0'));
+  memcpy(this->scratchpadBuffer, pingMessage, PING_MESSAGE_BUFFER_BYTES);
+  this->webSocketConnection.write(
+    (uint8_t*)this->scratchpadBuffer,
+    PING_MESSAGE_BUFFER_BYTES - sizeof('\0')
+  );
 
   const int endMessageError = this->webSocketConnection.endMessage();
   if(endMessageError){

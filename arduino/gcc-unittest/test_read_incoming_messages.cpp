@@ -88,12 +88,12 @@ static void testErrorMessageType(){
 }
 
 void test_read_incoming_messages(){
-  std::cout << "\treadIncomingMessages: patch output\n";
+  std::cout << "test_read_incoming_messages(): patch output\n";
   testPatchMessage();
-  std::cout << "\treadIncomingMessages: successful auth\n";
+  std::cout << "test_read_incoming_messages(): successful auth\n";
   testSuccessfulAuthMessage();
-  std::cout << "\treadIncomingMessages: pong\n";
+  std::cout << "test_read_incoming_messages(): pong\n";
   testPongMessage();
-  std::cout << "\treadIncomingMessages: error type\n";
+  std::cout << "test_read_incoming_messages(): error type\n";
   testErrorMessageType();
 }
