@@ -170,61 +170,76 @@ template <
   class SerialInterface,
   long int scratchpadBufferBytes
 >
-Pair<HoneycombError, bool> HoneycombClient<
+Pair<HoneycombError, Honeycomb::IncomingMessage> HoneycombClient<
   HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface, scratchpadBufferBytes
->::readIncomingMessages(JsonDocument* objectFromServer, unsigned long msSinceStartup
+>::readIncomingMessages(JsonDocument* objectFromServer, StringT* errorFromServer, unsigned long msSinceStartup
 ){
-  if(not (this->connected)) return {HoneycombError::disconnectedWebSocket, false};
+  if(not (this->connected)) return {HoneycombError::disconnectedWebSocket, Honeycomb::IncomingMessage::noMessage};
 
   JsonDocument json;
   const size_t messageBytes = this->webSocketConnection.parseMessage();  
   
   if(messageBytes == 0){
     const bool connectionStale = msSinceStartup - this->millisLastServerMessage >= this->maxMsBeforeTimeout;
-    if(not connectionStale) return {HoneycombError::ok, false};
+    if(not connectionStale) return {HoneycombError::ok, Honeycomb::IncomingMessage::noMessage};
     this->connected = false;
     this->authenticated = false;
-    return {HoneycombError::connectionStale, false};
+    return {HoneycombError::connectionStale, Honeycomb::IncomingMessage::noMessage};
   }
   
   this->millisLastServerMessage = msSinceStartup;
 
   if(messageBytes > scratchpadBufferBytes)
-    return {HoneycombError::maxSize, false};
+    return {HoneycombError::maxSize, Honeycomb::IncomingMessage::noMessage};
   if(this->webSocketConnection.messageType() != TYPE_TEXT)
-    return {HoneycombError::receivedMessageNotText, false};
+    return {HoneycombError::receivedMessageNotText, Honeycomb::IncomingMessage::noMessage};
 
   const DeserializationError parsingError = deserializeJson(json, this->webSocketConnection.readString());
   if(parsingError != DeserializationError::Ok)
-    return {deserializationErrorToHoneycombError(parsingError), false};
+    return {deserializationErrorToHoneycombError(parsingError), Honeycomb::IncomingMessage::noMessage};
 
   if(json["__messageType"].isNull())
-    return {HoneycombError::unknownReceivedMessageType, false};
+    return {HoneycombError::unknownReceivedMessageType, Honeycomb::IncomingMessage::noMessage};
   
   constexpr int strncmp_equal = 0;
+  if(strncmp(json["__messageType"], "pong", sizeof("pong")) == strncmp_equal){
+    return {HoneycombError::ok, Honeycomb::IncomingMessage::noMessage};
+  }  
+  
   if(strncmp(json["__messageType"], "patch", sizeof("patch")) == strncmp_equal){
-    if(not objectFromServer)
-      return {HoneycombError::ok, true};
-    *objectFromServer = json;
-    return {HoneycombError::ok, true};    
+    if(objectFromServer != nullptr)
+      *objectFromServer = json;
+    return {HoneycombError::ok, Honeycomb::IncomingMessage::objectFromServer};    
   }
+  
   if(strncmp(json["__messageType"], "auth", sizeof("auth")) == strncmp_equal){
     this->authenticated = false;
     
-    if(not json["error"].isNull()) return {HoneycombError::invalidAuthenticateRequest, false};
-    if(not (json["success"].is<bool>())) return {HoneycombError::unspecifiedAuthSuccess, false};
-    if(not (json["success"].as<bool>())) return {HoneycombError::otherConnectedDeviceHasSameID, false};
+    if(json["error"].is<const char*>()){
+      if(errorFromServer != nullptr)
+        *errorFromServer = json["error"].as<const char*>();
+      return {HoneycombError::invalidAuthenticateRequest, Honeycomb::IncomingMessage::errorFromServer};
+    };
+    if(not (json["success"].is<bool>())) 
+      return {HoneycombError::unspecifiedAuthSuccess, Honeycomb::IncomingMessage::noMessage};
+    if(not (json["success"].as<bool>())) 
+      return {HoneycombError::otherConnectedDeviceHasSameID, Honeycomb::IncomingMessage::noMessage};
     this->authenticated = true;
-    return {HoneycombError::ok, false};
-  }
-  if(strncmp(json["__messageType"], "pong", sizeof("pong")) == strncmp_equal){
-    return {HoneycombError::ok, false};
-  }  
-  if(strncmp(json["__messageType"], "error", sizeof("error")) == strncmp_equal){
-    return {HoneycombError::messageFormError, false};
+    return {HoneycombError::ok, Honeycomb::IncomingMessage::noMessage};
   }
   
-  return {HoneycombError::unknownReceivedMessageType, false};
+  if(strncmp(json["__messageType"], "error", sizeof("error")) == strncmp_equal){
+    if(json["error"].is<const char*>() && errorFromServer != nullptr)
+      *errorFromServer = json["error"].as<const char*>();
+    return {HoneycombError::messageFormError, Honeycomb::IncomingMessage::errorFromServer};
+  }
+  if(strncmp(json["__messageType"], "patcherr", sizeof("patcherr")) == strncmp_equal){
+    if(json["error"].is<const char*>() && errorFromServer != nullptr)
+      *errorFromServer = json["error"].as<const char*>();
+    return {HoneycombError::patchError, Honeycomb::IncomingMessage::errorFromServer};
+  }
+  
+  return {HoneycombError::unknownReceivedMessageType, Honeycomb::IncomingMessage::noMessage};
 }
 
 template <

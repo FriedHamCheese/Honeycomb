@@ -84,9 +84,15 @@ static void testEndMessageFailure(){
 }
 
 void test_client_patch_datapoint(){
-  std::cout << "test_client_patch_datapoint(): typical\n"; testTypical();
-  std::cout << "test_client_patch_datapoint(): disconnected state\n"; testDisconnected();
-  std::cout << "test_client_patch_datapoint(): unauthenticated state\n"; testUnauthenticated();
-  std::cout << "test_client_patch_datapoint(): beginMessage failure\n"; testBeginMessageFailure();
-  std::cout << "test_client_patch_datapoint(): endMessage failure\n"; testEndMessageFailure();
+  std::cout << "test_client_patch_datapoint():\n";
+  std::cout << "\ttypical\n";
+  testTypical();
+  std::cout << "\tdisconnected state\n";
+  testDisconnected();
+  std::cout << "\tunauthenticated state\n";
+  testUnauthenticated();
+  std::cout << "\tbeginMessage failure\n";
+  testBeginMessageFailure();
+  std::cout << "\tendMessage failure\n";
+  testEndMessageFailure();
 }

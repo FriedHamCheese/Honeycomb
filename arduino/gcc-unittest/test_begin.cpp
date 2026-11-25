@@ -143,24 +143,25 @@ static void testWebSocketBeginFails(){
 }
 
 void test_client_begin(){
-  std::cout << "test_client_begin(): positive response\n";
+  std::cout << "test_client_begin():\n";
+  std::cout << "\tpositive response\n";
   testBeginTypical();
-  std::cout << "test_client_begin(): HTTP connection failure\n";
+  std::cout << "\tHTTP connection failure\n";
   testHttpConnectionFailed();
-  std::cout << "test_client_begin(): non-200 status\n";
+  std::cout << "\tnon-200 status\n";
   testHttpStatusNot200();
-  std::cout << "test_client_begin(): exact scratchpad size\n";
+  std::cout << "\texact scratchpad size\n";
   testResponseAtScratchpadLimit();
-  std::cout << "test_client_begin(): one byte over scratchpad size\n";
+  std::cout << "\tone byte over scratchpad size\n";
   testResponseOneByteOverScratchpadLimit();
-  std::cout << "test_client_begin(): empty body\n";
+  std::cout << "\tempty body\n";
   testEmptyResponseBody();
-  std::cout << "test_client_begin(): broken JSON\n";
+  std::cout << "\tbroken JSON\n";
   testBrokenJsonSyntax();
-  std::cout << "test_client_begin(): missing attribute\n";
+  std::cout << "\tmissing attribute\n";
   testMissingExpectedAttribute();
-  std::cout << "test_client_begin(): wrong attribute type\n";
+  std::cout << "\twrong attribute type\n";
   testAttributeWrongType();
-  std::cout << "test_client_begin(): WebSocket begin failure\n";
+  std::cout << "\tWebSocket begin failure\n";
   testWebSocketBeginFails();
 }

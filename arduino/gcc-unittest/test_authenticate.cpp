@@ -87,12 +87,13 @@ static void testAuthenticateEndMessageFails(){
 }
 
 void test_client_authenticate(){
-  std::cout << "test_client_authenticate(): typical\n";
+  std::cout << "test_client_authenticate():\n";
+  std::cout << "\ttypical\n";
   testAuthenticateTypical();
-  std::cout << "test_client_authenticate(): disconnected state\n";
+  std::cout << "\tdisconnected state\n";
   testAuthenticateWhenDisconnected();
-  std::cout << "test_client_authenticate(): beginMessage failure\n";
+  std::cout << "\tbeginMessage failure\n";
   testAuthenticateBeginMessageFails();
-  std::cout << "test_client_authenticate(): endMessage failure\n";
+  std::cout << "\tendMessage failure\n";
   testAuthenticateEndMessageFails();
 }

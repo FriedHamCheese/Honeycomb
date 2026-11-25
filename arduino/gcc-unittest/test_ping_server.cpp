@@ -61,8 +61,13 @@ static void testEndMessageFailure(){
 }
 
 void test_client_ping_server(){
-  std::cout << "test_client_ping_server(): typical\n"; testTypical();
-  std::cout << "test_client_ping_server(): disconnected state\n"; testDisconnected();
-  std::cout << "test_client_ping_server(): beginMessage failure\n"; testBeginMessageFailure();
-  std::cout << "test_client_ping_server(): endMessage failure\n"; testEndMessageFailure();
+  std::cout << "test_client_ping_server():\n";
+  std::cout << "\ttypical\n";
+  testTypical();
+  std::cout << "\tdisconnected state\n";
+  testDisconnected();
+  std::cout << "\tbeginMessage failure\n";
+  testBeginMessageFailure();
+  std::cout << "\tendMessage failure\n";
+  testEndMessageFailure();
 }

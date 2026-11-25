@@ -88,8 +88,17 @@ enum class HoneycombError : uint8_t{
   invalidAuthenticateRequest,
   unspecifiedAuthSuccess,
   notAuthenticated,
+  patchError,
   unknown
 };
+
+namespace Honeycomb{
+  enum class IncomingMessage : uint8_t{
+    noMessage,
+    objectFromServer,
+    errorFromServer,
+  };
+}
 
 template <
   class HttpClientInterface, 
@@ -100,7 +109,7 @@ template <
   long int scratchpadBufferBytes
 >
 class HoneycombClient{
-  public:
+  public:  
   HoneycombClient(
     const char* serverURL,
     uint16_t serverPort, 
@@ -113,7 +122,7 @@ class HoneycombClient{
   HoneycombError begin();
   HoneycombError authenticate();
   HoneycombError pingServer();
-  Pair<HoneycombError, bool> readIncomingMessages(JsonDocument* objectFromServer, unsigned long msSinceStartup);
+  Pair<HoneycombError, Honeycomb::IncomingMessage> readIncomingMessages(JsonDocument* objectFromServer, StringT* errorFromServer, unsigned long msSinceStartup);
   HoneycombError patchDatapoint(JsonObject jsonRef);
 
   private:
