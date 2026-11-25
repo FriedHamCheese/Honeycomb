@@ -3,6 +3,10 @@
 
 #include "ArduinoJson.h"
 
+/*
+From ArduinoHttpClient 0.6.2, here for gcc-unittest
+*/
+#ifdef HONEYCOMB_NO_ARDUINOHTTPCLIENT_INCLUDE
 static const int HTTP_SUCCESS =0;
 // The end of the headers has been reached.  This consumes the '\n'
 // Could not connect to the server
@@ -23,42 +27,55 @@ static const int TYPE_BINARY           = 0x2;
 static const int TYPE_CONNECTION_CLOSE = 0x8;
 static const int TYPE_PING             = 0x9;
 static const int TYPE_PONG             = 0xa;
+#else
+  #include <ArduinoHttpClient.h>
+#endif
 
-inline bool periodicWait(
-  unsigned long& waitedMs, unsigned long targetWaitMs, unsigned long periodMs, void(*waitMs)(unsigned long)
-){
-  if(waitedMs >= targetWaitMs) return true;
-  waitMs(periodMs);
-  waitedMs += periodMs;
-  if(waitedMs >= targetWaitMs){
-    waitedMs = 0;
-    return true;
+namespace Honeycomb{
+  enum class IncomingMessage : uint8_t{
+    noMessage,
+    objectFromServer,
+    errorFromServer,
+  };
+  
+  //Test this next refactor
+  inline bool periodicWait(
+    unsigned long& waitedMs, unsigned long targetWaitMs, unsigned long periodMs, void(*waitMs)(unsigned long)
+  ){
+    if(waitedMs >= targetWaitMs) return true;
+    waitMs(periodMs);
+    waitedMs += periodMs;
+    if(waitedMs >= targetWaitMs){
+      waitedMs = 0;
+      return true;
+    }
+    return false;
   }
-  return false;
+
+  template< typename firstT, typename secondT>
+  struct Pair{
+    firstT first;
+    secondT second;
+    
+    Pair()
+    : first(), second()
+    {
+      
+    }
+    
+    Pair(const firstT& first, secondT second)
+    : first(first), second(second)
+    {
+    }
+
+    Pair<firstT, secondT>& operator=(const Pair<firstT, secondT>& other){
+      this->first = other.first;
+      this->second = other.second;
+      return *this;
+    }
+  };
 }
 
-template< typename firstT, typename secondT>
-struct Pair{
-  firstT first;
-  secondT second;
-  
-  Pair()
-  : first(), second()
-  {
-    
-  }
-  
-  Pair(const firstT& first, secondT second)
-  : first(first), second(second)
-  {
-  }
-
-  Pair<firstT, secondT>& operator=(const Pair<firstT, secondT>& other){
-    this->first = other.first;
-    this->second = other.second;
-    return *this;
-  }
-};
 
 enum class HoneycombError : uint8_t{
   ok,
@@ -92,14 +109,6 @@ enum class HoneycombError : uint8_t{
   unknown
 };
 
-namespace Honeycomb{
-  enum class IncomingMessage : uint8_t{
-    noMessage,
-    objectFromServer,
-    errorFromServer,
-  };
-}
-
 template <
   class HttpClientInterface, 
   class WebSocketClientInterface, 
@@ -117,12 +126,12 @@ class HoneycombClient{
     uint64_t deviceID,
     const char* deviceSecret,
     unsigned long msSinceStartup,
-    SerialInterface& serial
+    SerialInterface* serial = nullptr
   );
   HoneycombError begin();
   HoneycombError authenticate();
   HoneycombError pingServer();
-  Pair<HoneycombError, Honeycomb::IncomingMessage> readIncomingMessages(JsonDocument* objectFromServer, StringT* errorFromServer, unsigned long msSinceStartup);
+  Honeycomb::Pair<HoneycombError, Honeycomb::IncomingMessage> readIncomingMessages(JsonDocument* objectFromServer, StringT* errorFromServer, unsigned long msSinceStartup);
   HoneycombError patchDatapoint(JsonObject jsonRef);
 
   private:
@@ -132,7 +141,7 @@ class HoneycombClient{
   HttpClientInterface httpClient;
   NetworkInterface webSocketWiFiClient;
   WebSocketClientInterface webSocketConnection;
-  SerialInterface& serial;
+  SerialInterface* serial;
   const char* deviceSecret;
   uint64_t deviceID;
   unsigned long millisLastServerMessage;
@@ -149,7 +158,7 @@ class HoneycombClient{
   inline bool isAuthenticated() const{
     return this->authenticated;
   }
-  inline getMillisLastServerMessage() const noexcept{
+  inline unsigned long getMillisLastServerMessage() const noexcept{
     return this->millisLastServerMessage;
   }
   #ifdef HONEYCOMB_USE_DEV_METHODS

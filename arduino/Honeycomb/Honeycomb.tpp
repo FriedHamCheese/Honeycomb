@@ -18,7 +18,7 @@ HoneycombClient<
   uint64_t deviceID, 
   const char* deviceSecret,
   unsigned long msSinceStartup,
-  SerialInterface& serial
+  SerialInterface* serial
 )
 : httpWiFiClient(),
   httpClient(httpWiFiClient, serverURL, serverPort),
@@ -45,6 +45,7 @@ template <
 HoneycombError HoneycombClient<
   HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface, scratchpadBufferBytes
 >::begin(){
+  //why?
   this->httpClient.flush();
   this->httpClient.stop();
 
@@ -170,7 +171,7 @@ template <
   class SerialInterface,
   long int scratchpadBufferBytes
 >
-Pair<HoneycombError, Honeycomb::IncomingMessage> HoneycombClient<
+Honeycomb::Pair<HoneycombError, Honeycomb::IncomingMessage> HoneycombClient<
   HttpClientInterface, WebSocketClientInterface, NetworkInterface, StringT, SerialInterface, scratchpadBufferBytes
 >::readIncomingMessages(JsonDocument* objectFromServer, StringT* errorFromServer, unsigned long msSinceStartup
 ){

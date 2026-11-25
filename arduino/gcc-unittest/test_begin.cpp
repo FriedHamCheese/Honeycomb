@@ -45,7 +45,7 @@ static std::string validResponseBody(){
 static void testBeginTypical(){
   const char* const serverURL = "serverhttp.com";
   constexpr uint16_t serverPort = 65;
-  BeginTestClient client(serverURL, serverPort, 0, 0, "", 0, serial);
+  BeginTestClient client(serverURL, serverPort, 0, 0, "", 0, &serial);
   prepareResponse(client, validResponseBody());
 
   assert(client.begin() == HoneycombError::ok);
@@ -60,7 +60,7 @@ static void testBeginTypical(){
 }
 
 static void testHttpConnectionFailed(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   prepareResponse(client, validResponseBody());
   client.getHttpClient().getReturnValue = HTTP_ERROR_CONNECTION_FAILED;
   assert(client.begin() == HoneycombError::ArduinoHttpClientConnectionFailed);
@@ -68,7 +68,7 @@ static void testHttpConnectionFailed(){
 }
 
 static void testHttpStatusNot200(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   prepareResponse(client, validResponseBody());
   client.getHttpClient().responseStatusCodeValue = 503;
   assert(client.begin() == HoneycombError::httpInvalidServerResponseStatus);
@@ -76,7 +76,7 @@ static void testHttpStatusNot200(){
 }
 
 static void testResponseAtScratchpadLimit(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   std::string body = validResponseBody();
   assert(body.size() <= SCRATCHPAD_BUFFER_BYTES);
   body.append(SCRATCHPAD_BUFFER_BYTES - body.size(), ' ');
@@ -87,7 +87,7 @@ static void testResponseAtScratchpadLimit(){
 }
 
 static void testResponseOneByteOverScratchpadLimit(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   std::string body = validResponseBody();
   body.append(SCRATCHPAD_BUFFER_BYTES + 1 - body.size(), ' ');
   prepareResponse(client, body);
@@ -96,21 +96,21 @@ static void testResponseOneByteOverScratchpadLimit(){
 }
 
 static void testEmptyResponseBody(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   prepareResponse(client, "");
   assert(client.begin() == HoneycombError::jsonEmptyInput);
   assertDisconnectedAndUnauthenticated(client);
 }
 
 static void testBrokenJsonSyntax(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   prepareResponse(client, "{broken json}");
   assert(client.begin() == HoneycombError::jsonInvalidInput);
   assertDisconnectedAndUnauthenticated(client);
 }
 
 static void testMissingExpectedAttribute(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   JsonDocument response;
   response["domain"] = "server.com";
   response["port"] = 5000;
@@ -122,7 +122,7 @@ static void testMissingExpectedAttribute(){
 }
 
 static void testAttributeWrongType(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   JsonDocument response;
   response["domain"] = "server.com";
   response["port"] = "5000";
@@ -135,7 +135,7 @@ static void testAttributeWrongType(){
 }
 
 static void testWebSocketBeginFails(){
-  BeginTestClient client("host", 80, 0, 0, "", 0, serial);
+  BeginTestClient client("host", 80, 0, 0, "", 0, &serial);
   prepareResponse(client, validResponseBody());
   BeginTestWebSocket::beginReturnValue = -1;
   assert(client.begin() == HoneycombError::disconnectedWebSocket);

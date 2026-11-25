@@ -124,7 +124,7 @@ export class WebSocketRouterToMCU{
     }
   }
 
-  putToDevice(stringifiedObject, deviceID){
+  putToDevice(object, deviceID){
     /*
     Finds the AuthenticatedMCUConnection corresponding to deviceID and sends stringifiedObject.
     stringifiedObject must be a stringified JSON.
@@ -137,13 +137,11 @@ export class WebSocketRouterToMCU{
       return element.getDeviceID() === deviceID;
     });
     if(!connection) return false;
-    connection.getClientWebSocket().send(stringifiedObject);
+    object.__messageType = "patch";
+    connection.getClientWebSocket().send(JSON.stringify(object));
     return true;
   }
 };
-
-export const webSocketRouterToMCU = new WebSocketRouterToMCU();
-
 
 class AuthenticatedMCUConnection{
   #clientWebSocket;
@@ -233,7 +231,7 @@ export async function toMCUOnMessage(
     if(noHaveMessageType) return clientWebSocket.send(JSON.stringify({
       __messageType: "error", error: "Message does not have .__messageType as string."
     }));
-    
+
     switch(objectFromRequest.__messageType){
       case("ping"):{
         clientWebSocket.send(JSON.stringify({__messageType: "pong"}));  
@@ -364,3 +362,5 @@ async function handlePatchMessage(objectFromRequest, connection, clientWebSocket
       __messageType: "patcherr", error: "Cannot add datapoint to composite device."
     }));
 }
+
+export const webSocketRouter = new WebSocketRouterToMCU();

@@ -26,7 +26,7 @@ static void testAuthenticateTypical(){
   SerialMock serial;
   constexpr uint64_t expectedDeviceID = 15;
   const char* const expectedDeviceSecret = "cookies";
-  AuthTestClient client("host", 80, 0, expectedDeviceID, expectedDeviceSecret, 0, serial);
+  AuthTestClient client("host", 80, 0, expectedDeviceID, expectedDeviceSecret, 0, &serial);
   client.setConnected(true);
   prepareSuccessfulSend();
 
@@ -52,7 +52,7 @@ static void testAuthenticateTypical(){
 
 static void testAuthenticateWhenDisconnected(){
   SerialMock serial;
-  AuthTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  AuthTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   prepareSuccessfulSend();
 
   assert(client.authenticate() == HoneycombError::disconnectedWebSocket);
@@ -62,7 +62,7 @@ static void testAuthenticateWhenDisconnected(){
 
 static void testAuthenticateBeginMessageFails(){
   SerialMock serial;
-  AuthTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  AuthTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();
@@ -75,7 +75,7 @@ static void testAuthenticateBeginMessageFails(){
 
 static void testAuthenticateEndMessageFails(){
   SerialMock serial;
-  AuthTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  AuthTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();

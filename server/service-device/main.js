@@ -1,7 +1,7 @@
 process.loadEnvFile(new URL('./.env', import.meta.url));
 
 import {deviceRouter} from './apiv1/device.js';
-import {WebSocketRouterToMCU} from './apiv1/websockets.js';
+import {webSocketRouter} from './apiv1/webSockets.js';
 import {sqlConnectionPool} from './sqlConnectionPool.js'
 import {
   SERVICE_MAX_REQUEST_BODY_BYTES,
@@ -42,7 +42,6 @@ const httpServer = http.createServer({
   requestTimeout: GATEWAY_REQUEST_TIMEOUT_MS,
 }, app);
 
-const webSocketRouter = new WebSocketRouterToMCU();
 webSocketRouter.createSocket(httpServer, "/websocketapiv1");
 webSocketRouter.begin();
 

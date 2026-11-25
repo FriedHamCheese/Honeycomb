@@ -33,7 +33,7 @@ static void prepareRawMessage(const std::string& message){
 
 static void testDisconnected(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(false);
   client.setAuthenticated(true);
   ReadMessagesTestSocket::parseMessageReturnValue = 99;
@@ -48,7 +48,7 @@ static void testDisconnected(){
 
 static void testNoMessageBeforeTimeout(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, readMessagesTimeoutMs, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, readMessagesTimeoutMs, 1, "secret", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   constexpr unsigned long messageTime = 1000;
@@ -64,7 +64,7 @@ static void testNoMessageBeforeTimeout(){
 
 static void testStaleConnection(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, readMessagesTimeoutMs, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, readMessagesTimeoutMs, 1, "secret", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   ReadMessagesTestSocket::parseMessageReturnValue = 0;
@@ -78,7 +78,7 @@ static void testStaleConnection(){
 
 static void testMessageTooLarge(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   ReadMessagesTestSocket::parseMessageReturnValue = 1025;
 
@@ -92,7 +92,7 @@ static void testMessageTooLarge(){
 
 static void testNonTextMessage(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   ReadMessagesTestSocket::messageTypeReturnValue = TYPE_BINARY;
   ReadMessagesTestSocket::parseMessageReturnValue = 1;
@@ -107,7 +107,7 @@ static void testNonTextMessage(){
 
 static void testInvalidJson(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   prepareRawMessage("{invalid json");
 
@@ -121,7 +121,7 @@ static void testInvalidJson(){
 
 static void testMissingMessageType(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument messageWithoutType;
   messageWithoutType["payload"] = "value";
@@ -137,7 +137,7 @@ static void testMissingMessageType(){
 
 static void testUnknownMessageType(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument unknownMessage;
   unknownMessage["__messageType"] = "unknown";
@@ -153,7 +153,7 @@ static void testUnknownMessageType(){
 
 static void testSuccessfulAuthMessage(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument authMessage;
   authMessage["__messageType"] = "auth";
@@ -170,7 +170,7 @@ static void testSuccessfulAuthMessage(){
 
 static void testAuthErrorMessage(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   JsonDocument authMessage;
@@ -190,7 +190,7 @@ static void testAuthErrorMessage(){
 
 static void testAuthMissingSuccess(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   JsonDocument authMessage;
@@ -207,7 +207,7 @@ static void testAuthMissingSuccess(){
 
 static void testAuthRejectedByServer(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   JsonDocument authMessage;
@@ -225,7 +225,7 @@ static void testAuthRejectedByServer(){
 
 static void testPatchMessage(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument output;
   JsonDocument patchMessage;
@@ -248,7 +248,7 @@ static void testPatchMessage(){
 
 static void testPatchMessageWithNullOutput(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument patchMessage;
   patchMessage["__messageType"] = "patch";
@@ -265,7 +265,7 @@ static void testPatchMessageWithNullOutput(){
 
 static void testPongMessage(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument pongMessage;
   pongMessage["__messageType"] = "pong";
@@ -281,7 +281,7 @@ static void testPongMessage(){
 
 static void testErrorMessageType(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument errorMessage;
   errorMessage["__messageType"] = "error";
@@ -300,7 +300,7 @@ static void testErrorMessageType(){
 
 static void testErrorMessageWithNullOutput(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument errorMessage;
   errorMessage["__messageType"] = "error";
@@ -317,7 +317,7 @@ static void testErrorMessageWithNullOutput(){
 
 static void testPatchErrorMessageType(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument patchErrorMessage;
   patchErrorMessage["__messageType"] = "patcherr";
@@ -336,7 +336,7 @@ static void testPatchErrorMessageType(){
 
 static void testPatchErrorMessageWithNullOutput(){
   SerialMock serial;
-  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, serial);
+  ReadMessagesTestClient client("host", 80, 0, 1, "secret", 0, &serial);
   client.setConnected(true);
   JsonDocument patchErrorMessage;
   patchErrorMessage["__messageType"] = "patcherr";

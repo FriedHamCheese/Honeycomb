@@ -15,7 +15,7 @@ static void prepareSuccessfulSend(){
 
 static void testTypical(){
   SerialMock serial;
-  PingTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PingTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   prepareSuccessfulSend();
   assert(client.pingServer() == HoneycombError::ok);
@@ -30,7 +30,7 @@ static void testTypical(){
 
 static void testDisconnected(){
   SerialMock serial;
-  PingTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PingTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(false);
   client.setAuthenticated(false);
   prepareSuccessfulSend();
@@ -40,7 +40,7 @@ static void testDisconnected(){
 
 static void testBeginMessageFailure(){
   SerialMock serial;
-  PingTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PingTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();
@@ -51,7 +51,7 @@ static void testBeginMessageFailure(){
 
 static void testEndMessageFailure(){
   SerialMock serial;
-  PingTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PingTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();

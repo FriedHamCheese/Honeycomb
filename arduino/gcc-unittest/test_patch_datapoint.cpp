@@ -23,7 +23,7 @@ static JsonDocument makeDatapoint(){
 
 static void testTypical(){
   SerialMock serial;
-  PatchTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PatchTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();
@@ -43,7 +43,7 @@ static void testTypical(){
 
 static void testDisconnected(){
   SerialMock serial;
-  PatchTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PatchTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setAuthenticated(true);
   JsonDocument datapoint = makeDatapoint();
   assert(client.patchDatapoint(datapoint.as<JsonObject>()) == HoneycombError::disconnectedWebSocket);
@@ -52,7 +52,7 @@ static void testDisconnected(){
 
 static void testUnauthenticated(){
   SerialMock serial;
-  PatchTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PatchTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   JsonDocument datapoint = makeDatapoint();
   assert(client.patchDatapoint(datapoint.as<JsonObject>()) == HoneycombError::notAuthenticated);
@@ -61,7 +61,7 @@ static void testUnauthenticated(){
 
 static void testBeginMessageFailure(){
   SerialMock serial;
-  PatchTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PatchTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();
@@ -73,7 +73,7 @@ static void testBeginMessageFailure(){
 
 static void testEndMessageFailure(){
   SerialMock serial;
-  PatchTestClient client("host", 80, 0, 15, "cookies", 0, serial);
+  PatchTestClient client("host", 80, 0, 15, "cookies", 0, &serial);
   client.setConnected(true);
   client.setAuthenticated(true);
   prepareSuccessfulSend();
