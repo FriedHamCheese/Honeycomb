@@ -1,18 +1,25 @@
 #include "secrets.hpp"
+#include "ArduinoJson.h"
 #include "Honeycomb.hpp"
+
+#include <ArduinoHttpClient.h>
+
 #include <ESP8266WiFi.h>
 
-const uint16_t maxIncomingBytes = 1024;
+const uint16_t honeycombNetworkBufferBytes = 1024;
 const uint16_t msBeforeServerStale = 5000;
-HoneycombClient honeycombClient(
+HoneycombClient<
+  HttpClient, WebSocketClient, WiFiClient, String, decltype(Serial), honeycombNetworkBufferBytes
+> honeycombClient(
   secrets::serverAddress, 
   secrets::serverPort, 
-  maxIncomingBytes, 
   msBeforeServerStale, 
   secrets::deviceID, 
-  secrets::deviceSecret
+  secrets::deviceSecret,
+  millis()
 );
-Optional<bool, JsonDocument> variableUpdateFromServer;
+JsonDocument variableUpdateFromServer;
+String errorMessageFromServer;
 JsonDocument newDatapointToServer;
 
 void setup() {
@@ -20,18 +27,18 @@ void setup() {
   while(!Serial) delay(100);
   
   WiFi.begin(secrets::wifiSsid, secrets::wifiPassword);
-  honeycombClient.variablesFromServer = &variableUpdateFromServer;
+  honeycombClient.begin();
 }
 
 void loop() {
-  delay(2000);
+  delay(3500);
 
   const auto wifiStatus = WiFi.status();
   if(wifiStatus != WL_CONNECTED){
     static unsigned long wifiErrorWaitedMs = 0;
     constexpr unsigned long wifiErrorWaitMs = 5000;
     constexpr unsigned long waitPeriodMs = 500;
-    const bool completedFullWait = periodicWait(wifiErrorWaitedMs, wifiErrorWaitMs, waitPeriodMs, delay);
+    const bool completedFullWait = Honeycomb::periodicWait(wifiErrorWaitedMs, wifiErrorWaitMs, waitPeriodMs, delay);
     if(!completedFullWait) return;
     
     switch(wifiStatus){
@@ -56,10 +63,10 @@ void loop() {
   }
 
   if(not honeycombClient.isConnected()){
-    const int honeycombInitError = honeycombClient.begin();
-    if(honeycombInitError){
+    const HoneycombError honeycombInitError = honeycombClient.begin();
+    if(honeycombInitError != HoneycombError::ok){
       Serial.print("Error: error initialising honeycomb websocket instance (HoneycombError ");
-      Serial.print(honeycombInitError);
+      Serial.print((int)honeycombInitError);
       Serial.println(')');
       return;
     }
@@ -73,11 +80,12 @@ void loop() {
       Serial.println(')');
       return;
     }
-	constexpr unsigned long ms_for_auth_processing = 500;
+    constexpr unsigned long ms_for_auth_processing = 500;
     delay(ms_for_auth_processing);
     Serial.println("Authentication sent successfully.");
   }
 
+  //Hey maybe add periodic wait but only for this so we don't flood server with pings every 2 seconds
   const HoneycombError pingError = honeycombClient.pingServer();
   if(pingError != HoneycombError::ok){
     Serial.print("Error: error pinging honeycomb websocket instance (HoneycombError ");
@@ -87,23 +95,33 @@ void loop() {
   }
   Serial.println("Ping message sent successfully.");
 
-  const HoneycombError honeycombReadError = honeycombClient.readIncomingMessages();
-  if(honeycombReadError == HoneycombError::invalidAuthenticateRequest){
-    Serial.println("Error: Authentication rejected from server.");
-    return;
-  }
-  if(honeycombReadError == HoneycombError::connectionStale){
+  const Honeycomb::Pair<HoneycombError, Honeycomb::IncomingMessage> honeycombReadResult = honeycombClient.readIncomingMessages(&variableUpdateFromServer, &errorMessageFromServer, millis());
+  if(honeycombReadResult.first == HoneycombError::connectionStale){
     Serial.println("Error: Stale server connection. Reconnecting...");
     return;
   }
-  if(honeycombReadError != HoneycombError::ok){
+  if(honeycombReadResult.first != HoneycombError::ok){
     Serial.print("Error: Honeycomb read error (HoneycombError ");
-    Serial.print((uint16_t)honeycombReadError);
+    Serial.print((uint16_t)honeycombReadResult.first);
     Serial.println(')');
+    
+    if(honeycombReadResult.second == Honeycomb::IncomingMessage::errorFromServer){
+      Serial.print("Error message: ");
+      Serial.println(errorMessageFromServer);
+    }
     return;
   }
-
   Serial.println("Read OK.");
+  if(honeycombReadResult.second == Honeycomb::IncomingMessage::objectFromServer){
+    if(variableUpdateFromServer["temperature_celsius"].is<float>()){
+      Serial.print("temperature_celsius: ");
+      Serial.println(variableUpdateFromServer["temperature_celsius"].as<float>());
+    }
+    if(variableUpdateFromServer["relative_humidity_percent"].is<float>()){
+      Serial.print("relative_humidity_percent: ");
+      Serial.println(variableUpdateFromServer["relative_humidity_percent"].as<float>());
+    }
+  }
 
   constexpr bool patchToServer = false;
   if(patchToServer){
@@ -116,17 +134,5 @@ void loop() {
       Serial.print((uint16_t)honeycombPatchError);
       Serial.println(')');
     }
-  }
-  
-  if(!variableUpdateFromServer.errorCode) return;
-  variableUpdateFromServer.errorCode = false;
-  
-  if(not variableUpdateFromServer.output["temperature_celsius"].isNull()){
-    Serial.print("temperature_celsius: ");
-    Serial.println(variableUpdateFromServer.output["temperature_celsius"].as<float>());
-  }
-  if(not variableUpdateFromServer.output["relative_humidity_percent"].isNull()){
-    Serial.print("relative_humidity_percent: ");
-    Serial.println(variableUpdateFromServer.output["relative_humidity_percent"].as<float>());
   }
 }

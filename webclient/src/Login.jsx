@@ -84,6 +84,7 @@ export default function Login({
           className={styles.emailInput} 
           placeholder="Email address" 
           type="email"
+          autoComplete="email"
           value={emailInput}
           onChange={(htmlEvent) => {setEmailInput(htmlEvent.target.value)}}
         />
@@ -91,6 +92,7 @@ export default function Login({
           className={styles.passwordInput} 
           placeholder="Password" 
           type="password"
+          autoComplete="password"
           value={passwordInput}
           onChange={(htmlEvent) => {setPasswordInput(htmlEvent.target.value)}}
         />

@@ -1,3 +1,9 @@
 server/node_modules/*
 arduino/Honeycomb/secrets.hpp
 /server_mock/node_modules
+/server/apiv1 ref
+/server/service-user/node_modules
+server/service-device/.env
+/server/api-gateway/node_modules
+/server/service-device/node_modules
+arduino/gcc-unittest/honeycomb_unittest.exe

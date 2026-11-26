@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import styles from './CreateDevicePopup.module.css'
 
 import {
@@ -16,26 +16,56 @@ export function CreateDevicePopup({APIBaseURL, closeSelf, userSessionToken}){
 
   const [deviceNameSecrets, setDeviceNameSecrets] = useState({name: "", deviceSecret: "", deviceViewingSecret: ""});
   const [dataStructure, setDataStructure] = useState([]);
+  const [deviceDatatypes, setDeviceDatatypes] = useState([]);
+  const [datatypesLoaded, setDatatypesLoaded] = useState(false);
   const [displayingPageID, setDisplayingPageID] = useState(PageID.NAME_AND_SECRETS);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   const canGoPreviousPage = displayingPageID > 0;
+
+  useEffect(() => {
+    async function fetchDeviceDatatypes(){
+      let response;
+      try{
+        response = await fetch(`${APIBaseURL}/apiv1/device/datatypes`);
+      }catch(err){
+        if(err instanceof TypeError)
+          return setErrorMessage("Couldn't fetch datatypes allowed by server.");
+        return setErrorMessage(String(err));
+      }
+
+      try{
+        const datatypes = await response.json();
+        if(!response.ok)
+          return setErrorMessage(datatypes.error || `Received HTTP status ${response.status}.`);
+        if(!Array.isArray(datatypes))
+          return setErrorMessage("Received an invalid datatype list from server.");
+        setDeviceDatatypes(datatypes);
+        setDatatypesLoaded(true);
+        setErrorMessage("");
+      }catch(err){
+        if(err instanceof TypeError)
+          return setErrorMessage("Couldn't read response from server.");
+        if(err instanceof SyntaxError)
+          return setErrorMessage("Couldn't parse JSON from server response.");
+        return setErrorMessage(String(err));
+      }
+    }
+
+    fetchDeviceDatatypes();
+  }, [APIBaseURL]);
   
   async function submitDevice(){
     function getObjectForDeviceSubmission(){
-      const typesWithVariableSize = [
-        "int", "str"
-      ];
-      
       let object = {};
       
       for(const dataElement of dataStructure){
-        const isVariableType = typesWithVariableSize.includes(dataElement.type);
-        if(!isVariableType)
+        const datatype = deviceDatatypes.find(({requestedType}) => requestedType === dataElement.type);
+        if(!datatype?.customSizeBoundary)
           object[dataElement.name] = dataElement.type;
         else
-          object[dataElement.name] = `${dataElement.type}[${dataElement.bytes}]`;
+          object[dataElement.name] = `${dataElement.type}[${dataElement.size}]`;
       }
 
       object.__deviceName = deviceNameSecrets.name;
@@ -92,9 +122,17 @@ export function CreateDevicePopup({APIBaseURL, closeSelf, userSessionToken}){
             setDeviceNameSecrets={(value) => setDeviceNameSecrets(value)}/>
         }
         {
-          (displayingPageID === PageID.DATA_STRUCTURE) &&          
-          <DeviceDatapointStructurePage dataStructure={dataStructure} setDataStructure={setDataStructure}/>
+          (displayingPageID === PageID.DATA_STRUCTURE) &&
+          <>
+            <DeviceDatapointStructurePage
+              dataStructure={dataStructure}
+              setDataStructure={setDataStructure}
+              deviceDatatypes={deviceDatatypes}
+            />
+            {!datatypesLoaded && <p>Loading supported data types...</p>}
+          </>
         }
+        {errorMessage && <p role="alert">{errorMessage}</p>}
         {
           (displayingPageID === PageID.SUCCESS_PAGE) &&
           <SuccessPage successMessage={successMessage}/>
@@ -111,7 +149,9 @@ export function CreateDevicePopup({APIBaseURL, closeSelf, userSessionToken}){
             {
               (displayingPageID === PageID.DATA_STRUCTURE) &&
               <button 
-                className={styles.nextPopupPageButton} onClick={submitDevice}
+                className={styles.nextPopupPageButton}
+                onClick={submitDevice}
+                disabled={!datatypesLoaded}
               >
                 <BsCheckCircleFill />
               </button>
@@ -206,17 +246,7 @@ function DeviceNameSecretPage({deviceNameSecrets, setDeviceNameSecrets}){
   );
 }
 
-function DeviceDatapointStructurePage({dataStructure, setDataStructure}){
-  const typeOptions = [
-    "int",
-    "float",
-    "double",
-    "str"
-  ];
-  
-  const typesWithVariableSize = [
-    "int", "str"
-  ];
+function DeviceDatapointStructurePage({dataStructure, setDataStructure, deviceDatatypes}){
   
   function DataElement({dataElement, removeSelf}){    
     const [update, setUpdate] = useState({});
@@ -235,22 +265,33 @@ function DeviceDatapointStructurePage({dataStructure, setDataStructure}){
           className={styles.dataTableHeader} 
           onChange={(htmlEvent) => {
             dataElement.type = htmlEvent.target.value;
+            const selectedDatatype = deviceDatatypes.find(
+              ({requestedType}) => requestedType === dataElement.type
+            );
+            dataElement.size = selectedDatatype?.customSizeBoundary?.min ?? "";
             setUpdate({});
           }}          
           value={dataElement.type}
         >
           {
-            typeOptions.map((type) => <option value={type}>{type}</option>)
+            deviceDatatypes.map((datatype) =>
+              <option key={datatype.requestedType} value={datatype.requestedType}>
+                {datatype.requestedType}
+              </option>
+            )
           }
         </select>
         <input 
           className={styles.dataTableHeader} 
-          disabled={!typesWithVariableSize.includes(dataElement.type)}
+          type="number"
+          min={deviceDatatypes.find(({requestedType}) => requestedType === dataElement.type)?.customSizeBoundary?.min}
+          max={deviceDatatypes.find(({requestedType}) => requestedType === dataElement.type)?.customSizeBoundary?.max}
+          disabled={!deviceDatatypes.find(({requestedType}) => requestedType === dataElement.type)?.customSizeBoundary}
           onChange={(htmlEvent) => {
-            dataElement.bytes = htmlEvent.target.value;
+            dataElement.size = htmlEvent.target.value;
             setUpdate({});
           }}
-          value={dataElement.bytes}
+          value={dataElement.size ?? ""}
         />
       </div>
     );
@@ -263,7 +304,7 @@ function DeviceDatapointStructurePage({dataStructure, setDataStructure}){
           <button className={styles.dataElementRemoveButton} style={{visibility: "hidden"}}><BsTrash/></button>
           <h2 className={styles.dataTableHeader}>Name</h2>
           <h2 className={styles.dataTableHeader}>Type</h2>
-          <h2 className={styles.dataTableHeader}>Bytes</h2>
+          <h2 className={styles.dataTableHeader}>Size</h2>
         </div>
         {
           dataStructure.map((dataElement, index) => 
@@ -279,7 +320,16 @@ function DeviceDatapointStructurePage({dataStructure, setDataStructure}){
         }
       </div>
       <button 
-        className={styles.addDataElementButton} onClick={() => setDataStructure([...dataStructure, {}])}
+        className={styles.addDataElementButton}
+        disabled={deviceDatatypes.length === 0}
+        onClick={() => setDataStructure([
+          ...dataStructure,
+          {
+            name: "",
+            type: deviceDatatypes[0].requestedType,
+            size: deviceDatatypes[0].customSizeBoundary?.min ?? "",
+          },
+        ])}
       >
         <BsPlusCircle/>
       </button>
