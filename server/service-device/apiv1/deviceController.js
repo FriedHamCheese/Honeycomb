@@ -14,6 +14,8 @@ import {
   sqlConnectionPool,
 } from '../sqlConnectionPool.js'
 
+import {webSocketRouter} from './webSockets.js';
+
 import {
   FIRST_CHARACTER,
   MAX_DEVICE_SECRET_CHARACTERS,
@@ -44,8 +46,10 @@ export async function addDatapoint(request, response){
     const isCompositeDevice = !(await addDatapointLogic(objectFromResponse, tableName, sqlConnectionPool, request.deviceIDInt));
     if(isCompositeDevice)
       response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: `Cannot add datapoint to a composite device.`});
-    else
+    else{
+      webSocketRouter.putToDevice(request.body, request.deviceIDInt);
       response.status(HTTP_STATUS_FOR_CREATED).send({message: `Added datapoint to device ${request.deviceIDStr}`});
+    }
   }catch(err){
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
     console.log(err);
