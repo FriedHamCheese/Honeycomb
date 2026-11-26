@@ -1,3 +1,6 @@
+import {saltAndRehash, saveToLoginCache, getCachedLogin} from '../auth.js';
+import {sqlConnectionPool} from '../sqlConnectionPool.js';
+
 import {
   FIRST_CHARACTER,
   MIN_USERNAME_CHARACTERS,
@@ -19,54 +22,7 @@ import {
 
 import {randomBytes} from 'node:crypto';
 
-export async function getUserDevicePreviews(request, response, honeycombDBConnectionPool){
-  /*
-  Input:
-  - Authorization: userSessionToken, uuidv7-hex
-  
-  Returns:
-  - {
-    devices: [
-      {
-        deviceID: int(64),
-        deviceName: str[1-32],
-        isCompositeDevice: int(1)
-      },
-      ...
-    ]
-  }, with HTTP status 200
-  - HTTP status 401 if session token from Authorization is invalid
-  - HTTP status 500 for undocumented server errors
-  */
-  try{
-    const [devices] = await honeycombDBConnectionPool.execute(
-      "SELECT deviceID, deviceName, isCompositeDevice FROM Device WHERE ownerUserID = ?", [request.cachedLogin.userID]
-    );
-    response.send({devices: devices});
-  }catch(err){
-    response.status(HTTP_STATUS_FOR_SERVER_ERROR).send();
-    console.log(err);
-  }
-};
-
-export async function registerUser(request, response, honeycombDBConnectionPool, saltAndRehash){
-  /*
-  Input: {
-    email: str[1-48]
-    name: str[1-32]
-    password: str[8-32]
-  }
-  Any attributes exceeing the maximum length will be truncated
-  
-  Returns:
-  - HTTP status 201 if user registered successfully
-  - HTTP status 400 with {error: str} if
-    - .email, .name or .password is not a string type
-    - any attribute has less than specified characters
-    - .email or .name is already taken
-  - HTTP status 500 for undocumented server errors
-  */
-  
+export async function registerUser(request, response){
   if((typeof request.body) !== "object")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Request is not JSON."});
   
@@ -97,25 +53,21 @@ export async function registerUser(request, response, honeycombDBConnectionPool,
     });  
   
   try{
-    const [userObjectWithSameEmailResult, userObjectWithSameNameResult] = await Promise.all([
-      honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE email = ?", [truncatedEmail]),
-      honeycombDBConnectionPool.execute("SELECT name FROM UserObject WHERE name = ?", [truncatedName]),
-    ]);
-    
-    const QUERY_RESULT = 0;
-    const userObjectWithSameEmail = userObjectWithSameEmailResult[QUERY_RESULT];
-    const userObjectWithSameName = userObjectWithSameNameResult[QUERY_RESULT];
+    const [userWithSameEmailOrName] = await sqlConnectionPool.execute(
+      "SELECT name FROM Honeycomb.UserObject WHERE email=? OR name=?", [truncatedEmail, truncatedName]
+    );
 
-    if(userObjectWithSameEmail.length) 
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Email taken"});
-    if(userObjectWithSameName.length)
-      return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Name taken"});
+    if(userWithSameEmailOrName.length) 
+      if(userWithSameEmailOrName.email === truncatedEmail)
+        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Email taken"});
+      else
+        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Name taken"});
     
     const saltStr = randomBytes(GENERATED_USER_RAW_SALT_BYTES).toString('hex');
     const saltedUserPassword = saltAndRehash(truncatedPassword, saltStr);
     
-    const [insertionResult] = await honeycombDBConnectionPool.execute(
-      "INSERT INTO UserObject(email, saltedPassword, salt, name) VALUES (?,?,?,?)",
+    const [insertionResult] = await sqlConnectionPool.execute(
+      "INSERT INTO Honeycomb.UserObject(email, saltedPassword, salt, name) VALUES (?,?,?,?)",
       [truncatedEmail, saltedUserPassword, saltStr, truncatedName]
     );
     
@@ -128,25 +80,7 @@ export async function registerUser(request, response, honeycombDBConnectionPool,
   }
 }
 
-export async function loginUser(
-  request, response, honeycombDBConnectionPool, saltAndRehash, getCachedLogin, saveToLoginCache
-){
-  /*
-  Input: 
-  - Authorization: user uuid7-hex token
-  - if Authorization not valid or not included:{
-      email: str[0-48]  
-      password: str[0-32]
-    }
-    Any attributes exceeing the maximum length will be truncated
-  
-  Returns:
-  - HTTP status 200 with .loginToken: uuidv7, str[32]
-  - HTTP status 400 with .error: str; if .email or .password is not string type
-  - HTTP status 401 with .error: str; if .email and .password combination incorrect
-  - HTTP status 500 for undocumented server errors
-  */
-  
+export async function loginUser(request, response){
   const userToken = request.get('Authorization');
   if(getCachedLogin(userToken)) 
     return response.status(HTTP_STATUS_FOR_OK).send({loginToken: userToken});  
@@ -164,8 +98,8 @@ export async function loginUser(
   const truncatedPassword = password.substr(FIRST_CHARACTER, MAX_USER_PASSWORD_CHARACTERS).trim();
 
   try{
-    const [matchingUser] = await honeycombDBConnectionPool.execute(
-      "SELECT salt, saltedPassword, id FROM UserObject WHERE email = ?",
+    const [matchingUser] = await sqlConnectionPool.execute(
+      "SELECT salt, saltedPassword, id FROM Honeycomb.UserObject WHERE email = ?",
       [truncatedEmail]
     );
     if(!matchingUser.length)

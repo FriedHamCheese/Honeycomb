@@ -1,3 +1,5 @@
+import {sqlConnectionPool} from '../sqlConnectionPool.js'
+
 import {
   HTTP_STATUS_FOR_BAD_REQUEST,
   HTTP_STATUS_FOR_SERVER_ERROR,
@@ -16,7 +18,7 @@ import {
   DASHBOARD_FRAME_WIDTH_QUARTERS,
 } from '../../../constraints.js';
 
-export async function getDashboardWidgets(request, response, sqlConnectionPool){
+export async function getDashboardWidgets(request, response){
   try{
     const [widgets] = await sqlConnectionPool.execute(
       'SELECT * FROM Honeycomb.DashboardWidget WHERE deviceID = ?',
@@ -25,7 +27,7 @@ export async function getDashboardWidgets(request, response, sqlConnectionPool){
     response.send({widgets: widgets});
   }catch(err){
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: String(err)});
-    throw err;
+    console.log(err);
   }
 }
 
@@ -65,7 +67,7 @@ function validateDashboardWidget(widget){
   return null;
 }
 
-export async function postDashboardWidgets(request, response, sqlConnectionPool){
+export async function postDashboardWidgets(request, response){
   if((typeof request.body) !== "object")
     return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: "Request body must be a JSON object."});
   if(!Array.isArray(request.body.widgets))
@@ -79,69 +81,75 @@ export async function postDashboardWidgets(request, response, sqlConnectionPool)
       return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({error: validationError});
   }
 
-  const sqlConnection = await sqlConnectionPool.getConnection();
-  await sqlConnection.beginTransaction();
+  let sqlConnection;
 
   try{
-    const columnsResponse = await fetch(
-      `http://localhost:5200/apiv1/device/${request.deviceIDStr}/columns`,
-      {keepalive: true}
-    );
-    if(!columnsResponse.ok)
-      throw new Error(`Device service returned HTTP ${columnsResponse.status} when retrieving device columns.`);
-    const {columns} = await columnsResponse.json();
-    const deviceColumnNames = new Set(columns);
-
-    const queryValues = [];
-    const queryPlaceholders = [];
-
-    for(const requestWidget of request.body.widgets){
-      if(!deviceColumnNames.has(requestWidget.columnName)){
-        await sqlConnection.rollback();
-        sqlConnectionPool.releaseConnection(sqlConnection);
-        return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
-          error: `.columnName '${requestWidget.columnName}' does not exist on this device.`
-        });
+    sqlConnection = await sqlConnectionPool.getConnection();
+    await sqlConnection.beginTransaction();
+    
+    try{
+      const columnsResponse = await fetch(
+        `http://localhost:5200/apiv1/device/${request.deviceIDStr}/columns`,
+        {keepalive: true}
+      );
+      if(!columnsResponse.ok)
+        throw new Error(`Device service returned HTTP ${columnsResponse.status} when retrieving device columns.`);
+      const {columns} = await columnsResponse.json();
+      const deviceColumnNames = new Set(columns);
+  
+      const queryValues = [];
+      const queryPlaceholders = [];
+  
+      for(const requestWidget of request.body.widgets){
+        if(!deviceColumnNames.has(requestWidget.columnName)){
+          await sqlConnection.rollback();
+          return response.status(HTTP_STATUS_FOR_BAD_REQUEST).send({
+            error: `.columnName '${requestWidget.columnName}' does not exist on this device.`
+          });
+        }
+  
+        queryPlaceholders.push("(?, ?, ?, ?, ?, ?, ?, ?)");
+        queryValues.push(
+          request.deviceIDInt,
+          requestWidget.widgetId,
+          requestWidget.widgetType,
+          requestWidget.columnName,
+          requestWidget.xpos_quarters,
+          requestWidget.ypos_quarters,
+          requestWidget.width_quarters,
+          requestWidget.height_quarters,
+        );
       }
-
-      queryPlaceholders.push("(?, ?, ?, ?, ?, ?, ?, ?)");
-      queryValues.push(
-        request.deviceIDInt,
-        requestWidget.widgetId,
-        requestWidget.widgetType,
-        requestWidget.columnName,
-        requestWidget.xpos_quarters,
-        requestWidget.ypos_quarters,
-        requestWidget.width_quarters,
-        requestWidget.height_quarters,
-      );
+  
+      if(queryPlaceholders.length){
+        await sqlConnection.execute(
+          `INSERT INTO Honeycomb.DashboardWidget
+            (deviceID, widgetId, widgetType, columnName,
+            xpos_quarters, ypos_quarters, width_quarters, height_quarters)
+          VALUES ${queryPlaceholders.join(", ")}
+          ON DUPLICATE KEY UPDATE
+            widgetType = VALUES(widgetType),
+            columnName = VALUES(columnName),
+            xpos_quarters = VALUES(xpos_quarters),
+            ypos_quarters = VALUES(ypos_quarters),
+            width_quarters = VALUES(width_quarters),
+            height_quarters = VALUES(height_quarters)`,
+          queryValues
+        );
+      }
+      await sqlConnection.commit();
+      response.send({message: "Dashboard widgets updated."});
+    }catch(err){
+      await sqlConnection.rollback();
+      response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
+      console.log(err);    
     }
-
-    if(queryPlaceholders.length){
-      await sqlConnection.execute(
-        `INSERT INTO Honeycomb.DashboardWidget
-          (deviceID, widgetId, widgetType, columnName,
-           xpos_quarters, ypos_quarters, width_quarters, height_quarters)
-         VALUES ${queryPlaceholders.join(", ")}
-         ON DUPLICATE KEY UPDATE
-           widgetType = VALUES(widgetType),
-           columnName = VALUES(columnName),
-           xpos_quarters = VALUES(xpos_quarters),
-           ypos_quarters = VALUES(ypos_quarters),
-           width_quarters = VALUES(width_quarters),
-           height_quarters = VALUES(height_quarters)`,
-        queryValues
-      );
-    }
-    await sqlConnection.commit();
-    sqlConnectionPool.releaseConnection(sqlConnection);
-    response.send({message: "Dashboard widgets updated."});
   }catch(err){
-    await sqlConnection.rollback();
-    sqlConnectionPool.releaseConnection(sqlConnection);
+    console.log(err);
     response.status(HTTP_STATUS_FOR_SERVER_ERROR).send({error: err});
-    console.log(err);    
   }
+  if(sqlConnection)
+    sqlConnectionPool.releaseConnection(sqlConnection);
 }
 
 function getDeviceTableNameFromID(deviceIDStr){

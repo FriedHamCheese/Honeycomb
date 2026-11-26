@@ -1,7 +1,7 @@
-import {honeycombDBConnectionPool} from './sqlConnectionPool.js';
-
 import {uuidv7} from 'uuidv7';
 import {createHash}  from 'node:crypto'
+import {env, loadEnvFile} from 'node:process';
+loadEnvFile();
 
 import {
   FIRST_CHARACTER,
@@ -31,6 +31,12 @@ export function saveToLoginCache(email, userID){
   userLoginCache.push({email: email, userID: userID, token: loginToken});
   return loginToken;
 }
+export function removeLoginCache(userID){
+  const cacheIndex = userLoginCache.findIndex((cache) => cache.userID === userID);
+  if(cacheIndex === -1) return;
+  const REMOVE_ELEMENT_AT_INDEX = 1;
+  userLoginCache.splice(cacheIndex, REMOVE_ELEMENT_AT_INDEX);
+}
 
 export function checkCachedLoginMiddleware(request, response, nextRoute){
   /*
@@ -49,14 +55,14 @@ export function checkCachedLoginMiddleware(request, response, nextRoute){
   nextRoute();
 }
 
-export async function checkCachedLoginIsDeviceOwner(userLoginToken, deviceID, honeycombDBConnection){
+export async function checkCachedLoginIsDeviceOwner(userLoginToken, deviceID){
   const cachedLogin = await getCachedLogin(userLoginToken);
   if(!cachedLogin)
     return false;
 
   try {
     const deviceOwnershipResponse = await fetch(
-      `http://localhost:5200/apiv1/device/${deviceID}/isOwnedBy/${cachedLogin.userID}`,
+      `${env.DEVICE_SERVICE_DOMAIN}/apiv1/device/${deviceID}/isOwnedBy/${cachedLogin.userID}`,
       {keepalive: true}
     );
     if(!deviceOwnershipResponse.ok)
@@ -67,27 +73,6 @@ export async function checkCachedLoginIsDeviceOwner(userLoginToken, deviceID, ho
     console.log(err);
     return false;
   }
-}
-
-export async function checkAuthForDeviceQueryMiddleware(request, response, nextRoute){
-  const deviceSecret = request.get("deviceSecret");
-  const deviceViewingSecret = request.get("deviceViewingSecret");
-  const userLoginToken = request.get("Authorization");
-  
-  const hasOnlyUserLoginToken = (typeof(deviceSecret) !== "string") && (typeof(deviceViewingSecret) !== "string");
-  if(!hasOnlyUserLoginToken){
-    const error = await deviceSecretAndViewingSecretAuthentication(
-      request.deviceIDInt, deviceSecret, deviceViewingSecret, honeycombDBConnectionPool
-    );
-    if(!error) return nextRoute();
-  }
-  
-  const loggedInUserIsOwner = await checkCachedLoginIsDeviceOwner(userLoginToken, request.deviceIDInt);
-  if(loggedInUserIsOwner) return nextRoute();
-  
-  return response.status(HTTP_STATUS_FOR_UNAUTHORIZED).send({
-    error: "Device secret, viewing secret and user token are all invalid."
-  });
 }
 
 export async function checkCachedLoginIsDeviceOwnerMiddleware(request, response, nextRoute){
